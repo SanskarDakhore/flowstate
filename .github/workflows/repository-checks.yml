@@ -1,0 +1,20 @@
+name: Repository Structure Checks
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  check-structure:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Run Structure Validator
+        run: |
+          node scripts/validation/check_structure.js
+

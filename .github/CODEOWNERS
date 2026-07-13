@@ -1,0 +1,15 @@
+# FLOWSTATE Monorepo Code Owners
+
+# Global owners (default)
+*       @yashp
+
+# Frontend owners
+/frontend/   @yashp
+
+# Backend and Middleware owners
+/backend/    @yashp
+/middleware/ @yashp
+
+# Shared contracts and database
+/shared/     @yashp
+/database/   @yashp

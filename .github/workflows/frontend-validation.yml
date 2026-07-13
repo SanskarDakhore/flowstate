@@ -1,0 +1,43 @@
+name: Frontend Validation
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-validation.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend-validation.yml'
+
+jobs:
+  validate-frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Validate Frontend Assets Directory
+        run: |
+          if [ ! -d "frontend/Assets" ]; then
+            echo "Error: frontend/Assets directory is missing."
+            exit 1
+          fi
+          echo "Frontend Assets directory is present."
+
+      - name: Verify Meta Files
+        run: |
+          echo "Checking that all Assets have matching .meta files..."
+          # A simple check: find any file/directory in frontend/Assets/ and make sure it has a .meta file
+          # We'll run a quick verification of top level directories in Assets/
+          missing_meta=0
+          for item in frontend/Assets/*; do
+            if [ -e "$item" ] && [ ! -e "$item.meta" ] && [ "${item##*.}" != "meta" ]; then
+              echo "Warning: Missing meta file for $item"
+              # We won't fail the build on this yet, but we will log it
+            fi
+          done
+          echo "Meta file check completed."

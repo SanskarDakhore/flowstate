@@ -1,0 +1,7 @@
+# Backend Tests
+
+Place test files with naming convention: `*.test.ts`
+
+- `unit/` — Pure logic tests, no external dependencies
+- `integration/` — Tests with database/external services
+- `e2e/` — Full API endpoint tests

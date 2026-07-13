@@ -1,0 +1,15 @@
+{
+  "environment": "staging",
+  "api": {
+    "port": 3000,
+    "corsOrigin": "TBD"
+  },
+  "features": {
+    "leaderboards": true,
+    "cosmetics": true,
+    "analytics": true
+  },
+  "logging": {
+    "level": "info"
+  }
+}

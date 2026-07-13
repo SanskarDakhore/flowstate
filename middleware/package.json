@@ -1,0 +1,18 @@
+{
+  "name": "flowstate-middleware",
+  "version": "0.1.0",
+  "description": "FLOWSTATE middleware — shared application-layer logic for auth, validation, rate limiting, and request handling",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "test": "jest",
+    "lint": "eslint src/"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

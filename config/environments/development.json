@@ -1,0 +1,15 @@
+{
+  "environment": "development",
+  "api": {
+    "port": 3000,
+    "corsOrigin": "*"
+  },
+  "features": {
+    "leaderboards": true,
+    "cosmetics": false,
+    "analytics": false
+  },
+  "logging": {
+    "level": "debug"
+  }
+}
