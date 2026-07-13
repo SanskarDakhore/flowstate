@@ -1,4 +1,4 @@
-﻿# Database Agent
+# Database Agent
 
 ## Mission
 Design, implement, and maintain the FLOWSTATE database schema, migrations, and query optimization.
@@ -38,9 +38,11 @@ None currently documented.
 
 ## Known Constraints
 - Target platforms: Android and iOS
-- Game client: Unity + C#
-- Backend: Node.js + TypeScript + Express (assumed)
-- Database: PostgreSQL (assumed)
+- Primary ecosystem: JavaScript
+- Preferred production language: TypeScript
+- Game client: Framework-neutral TS client (`frontend/src/`)
+- Backend: Node.js + TypeScript + Express
+- Database: PostgreSQL
 
 ## Interfaces With Other Agents
 All agents share the context system. Coordinate through handoffs and DECISIONS.md.

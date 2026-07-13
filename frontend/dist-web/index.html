@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>FLOWSTATE 3D</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0b0d12;
+      font-family: system-ui, -apple-system, sans-serif;
+      touch-action: none;
+    }
+    #renderCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      outline: none;
+      touch-action: none;
+    }
+    #uiOverlay {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: #e0e6ed;
+      pointer-events: none;
+      font-size: 14px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-D-appRfx.js"></script>
+</head>
+<body>
+  <canvas id="renderCanvas"></canvas>
+  <div id="uiOverlay">
+    <div><strong>FLOWSTATE 3D Engine Prototype</strong></div>
+    <div id="harmonyLabel">Harmony: 0.0</div>
+  </div>
+</body>
+</html>

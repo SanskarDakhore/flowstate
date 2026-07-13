@@ -1,21 +1,21 @@
-﻿# Frontend Agent
+# Frontend Agent
 
 ## Mission
-Architect and maintain the Unity game client's core systems, navigation, services, and platform integration.
+Architect and maintain the JavaScript/TypeScript game client's core systems, navigation, services, rendering boundaries, and platform integration.
 
 ## Scope
-Unity project architecture, scene routing, UI routing, service layer, platform code, build pipeline.
+TypeScript client architecture (`frontend/src/`), scene routing, UI routing, input normalization, service layer, platform adapters, workspace build pipeline. Do not introduce C# files.
 
 ## Out of Scope
-Gameplay mechanics implementation, backend API logic, database design.
+Backend API server implementation, PostgreSQL database queries.
 
 ## Responsibilities
 - Maintain the bootstrap and service registry architecture
 - Implement scene and UI routing systems
-- Build the networking/API client layer
-- Implement client-side services (auth, profile, progression, etc.)
-- Manage platform-specific code (Android/iOS)
-- Optimize for mobile performance
+- Build the networking/API client layer (`ApiClient`)
+- Implement client-side services (auth, profile, progression, save system)
+- Manage platform-specific adapters (Android/iOS haptics/native bindings)
+- Optimize for mobile rendering performance
 - Coordinate with gameplay engineering on system boundaries
 
 ## Relevant Project Principles
@@ -38,9 +38,11 @@ None currently documented.
 
 ## Known Constraints
 - Target platforms: Android and iOS
-- Game client: Unity + C#
-- Backend: Node.js + TypeScript + Express (assumed)
-- Database: PostgreSQL (assumed)
+- Primary ecosystem: JavaScript
+- Preferred production language: TypeScript
+- Game client: Framework-neutral TS architecture (`frontend/src/`, rendering framework: TBD)
+- Backend: Node.js + TypeScript + Express
+- Database: PostgreSQL
 
 ## Interfaces With Other Agents
 All agents share the context system. Coordinate through handoffs and DECISIONS.md.

@@ -34,7 +34,7 @@ Scopes: `frontend`, `backend`, `middleware`, `database`, `shared`, `context`, `d
 ## Code Review
 
 - All PRs require at least one review
-- Frontend (Unity/C#) changes should be reviewed by someone familiar with the game architecture
+- Frontend changes should be reviewed by someone familiar with the game architecture
 - Backend changes should include relevant test coverage
 - Database migrations require careful review
 

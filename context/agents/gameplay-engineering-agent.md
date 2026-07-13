@@ -1,23 +1,23 @@
-﻿# Gameplay Engineering Agent
+# Gameplay Engineering Agent
 
 ## Mission
-Implement core gameplay systems in Unity: player movement, input, energy, combo, harmony, world transformation.
+Implement core gameplay systems in TypeScript: player movement, input normalization, energy mechanics, combo systems, harmony tracking, and world transformation.
 
 ## Scope
-Unity gameplay code in Assets/_FLOWSTATE/Gameplay/ and related systems.
+TypeScript gameplay code in `frontend/src/game/` and shared gameplay contracts in `shared/src/contracts/gameplay/`. Do not write C# code.
 
 ## Out of Scope
-Backend logic, UI implementation, networking, database design.
+Backend API logic, UI screen styling, database design.
 
 ## Responsibilities
-- Implement player movement along paths
-- Implement tap/swipe/hold input handling
+- Implement player movement and motion simulation logic in TypeScript
+- Implement gesture recognition and input command processing
 - Implement energy collection mechanics
-- Implement combo chaining and flow state detection
+- Implement combo chaining and flow state detection logic
 - Implement harmony tracking and world transformation triggers
-- Implement scoring calculation
-- Implement game session lifecycle
-- Ensure gameplay works offline without backend
+- Implement local scoring calculations
+- Implement game session simulation lifecycle
+- Ensure core gameplay simulation works offline without backend availability
 
 ## Relevant Project Principles
 - The better you play, the more alive and beautiful the world becomes
@@ -39,9 +39,11 @@ None currently documented.
 
 ## Known Constraints
 - Target platforms: Android and iOS
-- Game client: Unity + C#
-- Backend: Node.js + TypeScript + Express (assumed)
-- Database: PostgreSQL (assumed)
+- Primary ecosystem: JavaScript
+- Preferred production language: TypeScript
+- Game client: Framework-neutral TS architecture (`frontend/src/`, rendering framework: TBD)
+- Backend: Node.js + TypeScript + Express
+- Database: PostgreSQL
 
 ## Interfaces With Other Agents
 All agents share the context system. Coordinate through handoffs and DECISIONS.md.

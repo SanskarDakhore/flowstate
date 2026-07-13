@@ -25,7 +25,7 @@ const REQUIRED_DIRS = [
   'database/schema',
   'database/migrations',
   'database/seeds',
-  'shared/contracts',
+  'shared/src/contracts',
   'context/agents',
   'context/domains',
   'context/handoffs',
@@ -40,12 +40,20 @@ const REQUIRED_DIRS = [
   'ci-cd/workflows',
   'scripts/validation',
   'tools/project-structure',
-  'frontend/Assets/_FLOWSTATE/Core',
-  'frontend/Assets/_FLOWSTATE/Gameplay',
-  'frontend/Assets/_FLOWSTATE/Presentation',
-  'frontend/Assets/_FLOWSTATE/Routing',
-  'frontend/Assets/_FLOWSTATE/Services',
-  'frontend/Assets/_FLOWSTATE/UI'
+  'frontend/src/core',
+  'frontend/src/game',
+  'frontend/src/rendering/engine',
+  'frontend/src/rendering/scene',
+  'frontend/src/rendering/camera',
+  'frontend/src/rendering/lighting',
+  'frontend/src/rendering/environment',
+  'frontend/src/rendering/player',
+  'frontend/src/rendering/materials',
+  'frontend/src/audio',
+  'frontend/src/haptics',
+  'frontend/src/ui',
+  'frontend/src/scenes',
+  'frontend/src/networking'
 ];
 
 // 2. Required Root Files
@@ -57,7 +65,15 @@ const REQUIRED_FILES = [
   'CONTRIBUTING.md',
   'CHANGELOG.md',
   'LICENSE',
-  'PROJECT_STRUCTURE.md'
+  'PROJECT_STRUCTURE.md',
+  'package.json',
+  'tsconfig.base.json',
+  'frontend/package.json',
+  'frontend/tsconfig.json',
+  'frontend/vite.config.ts',
+  'frontend/index.html',
+  'shared/package.json',
+  'shared/tsconfig.json'
 ];
 
 // 3. Critical Context Files
@@ -75,10 +91,10 @@ const CRITICAL_CONTEXT = [
 
 // 4. Routing Files
 const ROUTING_FILES = [
-  'frontend/Assets/_FLOWSTATE/Scenes/SceneId.cs',
-  'frontend/Assets/_FLOWSTATE/Scenes/SceneRouter.cs',
-  'frontend/Assets/_FLOWSTATE/UI/Navigation/RouteId.cs',
-  'frontend/Assets/_FLOWSTATE/UI/Navigation/UIRouter.cs'
+  'frontend/src/scenes/scene-id.ts',
+  'frontend/src/scenes/scene-router.ts',
+  'frontend/src/ui/navigation/route-id.ts',
+  'frontend/src/ui/navigation/ui-router.ts'
 ];
 
 // 5. Documentation
@@ -106,7 +122,9 @@ const REQUIRED_DOCS = [
   'docs/development/DEBUGGING.md',
   'docs/development/RELEASE_PROCESS.md',
   'docs/adr/README.md',
-  'docs/adr/ADR-0001-monorepo-architecture.md'
+  'docs/adr/ADR-0001-monorepo-architecture.md',
+  'docs/adr/ADR-0002-javascript-typescript-primary-stack.md',
+  'docs/adr/ADR-0003-true-3d-babylonjs-runtime.md'
 ];
 
 let failed = false;

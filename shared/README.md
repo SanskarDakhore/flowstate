@@ -1,10 +1,10 @@
-# Shared Contracts
+# Shared Contracts (@flowstate/shared)
 
-Cross-layer contracts, schemas, constants, and enums shared between frontend and backend.
+Cross-layer contracts, schemas, constants, and enums shared between frontend TypeScript packages and backend API servers.
 
 ## Purpose
 
-Define interfaces and data structures that must remain consistent across the client and server. These are the agreed-upon "shapes" of data exchanged between systems.
+Define interfaces and data structures that must remain consistent across client and server. These are the agreed-upon shapes of data exchanged across boundaries.
 
 ## Structure
 
@@ -12,14 +12,13 @@ Define interfaces and data structures that must remain consistent across the cli
 - `contracts/events/` — Event payload definitions
 - `contracts/gameplay/` — Gameplay data structures shared across boundaries
 - `contracts/errors/` — Standardized error format
-- `schemas/` — Validation schemas (JSON Schema, Zod, etc.)
+- `schemas/` — Validation schemas
 - `constants/` — Shared constant values
 - `enums/` — Shared enumerations
 - `versioning/` — API version tracking
 
 ## Rules
 
-- Contracts define shapes, not implementations
-- Changes to contracts should be versioned and backwards-compatible
-- Unity C# classes should NOT directly import TypeScript contracts — use code generation or manual sync
-- Never couple Unity domain classes directly to backend database models
+- Contracts define data shapes, not concrete runtime implementations.
+- Frontend and backend packages import contracts directly from `@flowstate/shared`.
+- Never couple database implementation models directly to frontend rendering state.

@@ -1,11 +1,11 @@
 # Debugging Guide
 
-## Unity
-- Use `Debug.Log()` with `[SystemName]` prefixes
-- Debug tools in `Assets/_FLOWSTATE/Debug/`
-- Unity Profiler for performance
+## Frontend Client
+- Use `console.log()` with `[SystemName]` prefixes
+- Debug console overlays located in `frontend/src/debug/`
+- Standard browser / Node inspector debugging
 
-## Backend
+## Backend API Server
 - Structured JSON logging
 - Request IDs for tracing
 - `NODE_ENV=development` for verbose output

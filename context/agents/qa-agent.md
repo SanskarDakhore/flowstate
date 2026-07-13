@@ -1,22 +1,21 @@
-﻿# QA Agent
+# QA Agent
 
 ## Mission
-Ensure FLOWSTATE's quality through testing strategy, test implementation, and quality standards.
+Ensure FLOWSTATE's quality through testing strategy, test implementation, and quality standards across the JS/TS monorepo.
 
 ## Scope
-Test architecture, unit/integration/e2e tests, performance testing, device testing.
+Test architecture across npm workspaces (`frontend/tests/`, `backend/tests/`, `middleware/tests/`, `tests/`), structural validation, type checking, and API verification.
 
 ## Out of Scope
 Feature implementation, visual design, audio production.
 
 ## Responsibilities
-- Define testing strategy and coverage requirements
-- Implement unit tests for gameplay logic
-- Implement API integration tests
-- Design performance testing approach
+- Define testing strategy and coverage requirements for TypeScript packages
+- Implement unit tests for client gameplay logic and backend services
+- Implement API integration and contract tests
 - Validate score submission and leaderboard integrity
 - Test session lifecycle edge cases
-- Verify cross-platform behavior (Android/iOS)
+- Verify monorepo structural compliance via `check_structure.js`
 
 ## Relevant Project Principles
 - The better you play, the more alive and beautiful the world becomes
@@ -38,9 +37,11 @@ None currently documented.
 
 ## Known Constraints
 - Target platforms: Android and iOS
-- Game client: Unity + C#
-- Backend: Node.js + TypeScript + Express (assumed)
-- Database: PostgreSQL (assumed)
+- Primary ecosystem: JavaScript
+- Preferred production language: TypeScript
+- Game client: Framework-neutral TS client (`frontend/src/`)
+- Backend: Node.js + TypeScript + Express
+- Database: PostgreSQL
 
 ## Interfaces With Other Agents
 All agents share the context system. Coordinate through handoffs and DECISIONS.md.

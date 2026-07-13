@@ -1,27 +1,38 @@
 # Local Development Setup
 
 ## Prerequisites
-- Unity 2022.3 LTS or later
-- Node.js 18+
-- npm
+- Node.js 18+ and npm
 - PostgreSQL 15+ (or Docker)
 - Git
 
-## Backend Setup
+## Monorepo Setup
 ```bash
-cd backend
-cp ../.env.example ../.env  # Edit with your local values
+# 1. Install workspace dependencies
 npm install
-npm run dev
+
+# 2. Typecheck all packages (shared, middleware, backend, frontend)
+npm run typecheck
+
+# 3. Build workspaces
+npm run build
+
+# 4. Run workspace tests
+npm run test
+
+# 5. Run structure validation
+npm run validate
 ```
 
-## Frontend Setup
-1. Open Unity Hub
-2. Add project from `frontend/` directory
-3. Open the Bootstrap scene
+## Running Backend Locally
+```bash
+cp .env.example .env  # Edit local environment values
+npm run dev --workspace=backend
+```
 
-## Database Setup
-TBD — depends on migration tooling selection.
+## Running Frontend Locally
+```bash
+npm run dev --workspace=frontend
+```
 
 ## Verification
 ```bash

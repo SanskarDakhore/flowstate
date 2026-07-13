@@ -1,0 +1,17 @@
+{
+  "name": "@flowstate/shared",
+  "version": "0.1.0",
+  "description": "Shared cross-boundary data contracts, enums, constants, and events for FLOWSTATE",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"No test suite for shared contracts yet\"",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

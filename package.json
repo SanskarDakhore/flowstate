@@ -1,0 +1,23 @@
+{
+  "name": "flowstate",
+  "version": "0.1.0",
+  "description": "FLOWSTATE — Relaxing yet competitive mobile game monorepo",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "middleware",
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "validate": "node scripts/validation/check_structure.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

@@ -5,11 +5,13 @@ on:
     branches: [ main, master ]
     paths:
       - 'frontend/**'
+      - 'shared/**'
       - '.github/workflows/frontend-validation.yml'
   pull_request:
     branches: [ main, master ]
     paths:
       - 'frontend/**'
+      - 'shared/**'
       - '.github/workflows/frontend-validation.yml'
 
 jobs:
@@ -20,24 +22,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Validate Frontend Assets Directory
-        run: |
-          if [ ! -d "frontend/Assets" ]; then
-            echo "Error: frontend/Assets directory is missing."
-            exit 1
-          fi
-          echo "Frontend Assets directory is present."
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Verify Meta Files
-        run: |
-          echo "Checking that all Assets have matching .meta files..."
-          # A simple check: find any file/directory in frontend/Assets/ and make sure it has a .meta file
-          # We'll run a quick verification of top level directories in Assets/
-          missing_meta=0
-          for item in frontend/Assets/*; do
-            if [ -e "$item" ] && [ ! -e "$item.meta" ] && [ "${item##*.}" != "meta" ]; then
-              echo "Warning: Missing meta file for $item"
-              # We won't fail the build on this yet, but we will log it
-            fi
-          done
-          echo "Meta file check completed."
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck Frontend
+        run: npm run typecheck --workspace=frontend
+
+      - name: Test Frontend
+        run: npm run test --workspace=frontend
+
+      - name: Build Frontend
+        run: npm run build --workspace=frontend

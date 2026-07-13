@@ -2,101 +2,90 @@
 
 **The better you play, the more alive and beautiful the world becomes.**
 
-FLOWSTATE is a relaxing yet competitive mobile game for Android and iOS. The player controls a small glowing entity moving through an abstract world, transforming chaos into harmony through simple tap, swipe, and hold interactions.
+FLOWSTATE is a relaxing yet competitive **True 3D** mobile game for Android and iOS powered by **Babylon.js**. The player controls a small glowing entity moving through an abstract 3D world, transforming chaos into harmony through simple tap, swipe, and hold interactions.
 
 ## Current Status
 
-> **Phase: Initial Scaffold**
-> The repository structure is established. Core gameplay implementation has not yet begun.
+> **Phase: True 3D Direction Confirmed — Babylon.js Runtime Integrated**
+> The frontend client layer is powered by `@babylonjs/core` using a modular presentation-bridge architecture and a Vite local browser development server.
 
 ## Repository Architecture
 
-```
+```text
 flowstate/
-├── frontend/       — Unity game client (C#)
+├── frontend/        — True 3D game client (Babylon.js, TypeScript, Vite)
+│   ├── src/
+│   │   ├── core/           # Bootstrap, ServiceRegistry, StateMachine, EventBus
+│   │   ├── game/           # Player state simulation, Input router, Gestures
+│   │   ├── rendering/      # Babylon.js modular presentation layer
+│   │   │   ├── engine/     # Generic RenderingEngine & BabylonRenderingEngine
+│   │   │   ├── scene/      # GameplayScene & SceneFactory
+│   │   │   ├── camera/     # GameplayCamera target follow camera
+│   │   │   ├── lighting/   # GameplayLighting (Hemispheric & Directional)
+│   │   │   ├── environment/# EnvironmentView & WorldPresentation contract
+│   │   │   ├── player/     # BabylonPlayerView & PlayerView contract
+│   │   │   └── materials/  # PlayerMaterialFactory (Emissive orb)
+│   │   ├── audio/          # AudioManager adaptive music interface
+│   │   ├── haptics/        # HapticsService semantic adapter
+│   │   ├── ui/             # UIRouter & RouteId
+│   │   ├── scenes/         # SceneRouter & SceneId
+│   │   ├── networking/     # ApiClient REST client
+│   │   └── main.ts         # Browser & engine entry point
+│   ├── index.html          # WebGL render canvas surface
+│   └── vite.config.ts      # Local dev server config
 ├── middleware/      — Shared application-layer logic (TypeScript)
 ├── backend/         — API server (Node.js / TypeScript / Express)
 ├── database/        — Schema, migrations, seeds, design docs
-├── shared/          — Contracts, schemas, enums shared across layers
-├── context/         — AI agent context and project knowledge
+├── shared/          — Cross-boundary contracts (@flowstate/shared)
+├── context/         — AI agent context and persistent project knowledge
 ├── docs/            — Architecture, game design, API, development docs
-├── infrastructure/  — Docker, deployment, monitoring placeholders
-├── scripts/         — Developer tooling and automation
-├── tests/           — Cross-system tests (contract, integration, e2e)
-├── tools/           — Project utilities (structure validation, etc.)
-├── config/          — Environment configs and feature flags
-└── .github/         — CI/CD workflows, issue/PR templates
+├── package.json     — Root monorepo workspace configuration
+└── tsconfig.base.json — Root shared TypeScript configuration
 ```
-
-See [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) for the complete tree and dependency rules.
 
 ## Technology Stack
 
 | Layer | Technology | Status |
 |-------|-----------|--------|
-| Game Client | Unity + C# | Confirmed |
-| Backend | Node.js + TypeScript + Express | Assumed |
-| Database | PostgreSQL | Assumed |
-| CI/CD | GitHub Actions | Assumed |
-| Cloud Provider | TBD | Not selected |
+| Game Presentation | True 3D | Confirmed |
+| Ecosystem | JavaScript / Node.js | Confirmed |
+| Preferred Language | TypeScript | Confirmed |
+| Frontend 3D Runtime | Babylon.js (`@babylonjs/core`) | Confirmed |
+| Local Dev Server | Vite | Confirmed |
+| Mobile Packaging | Candidate: Capacitor | Provisional |
+| Backend | Node.js + TypeScript + Express | Confirmed |
+| Database | PostgreSQL | Confirmed |
 
 ## Local Setup
 
-### Prerequisites
-- Unity 2022.3 LTS or later (for frontend)
-- Node.js 18+ and npm (for backend/middleware)
-- PostgreSQL 15+ (for database) — or Docker
-- Git
-
-### Backend
 ```bash
-cd backend
-cp ../.env.example ../.env    # Edit with your local values
+# 1. Install all workspace dependencies
 npm install
-npm run dev
+
+# 2. Run local 3D browser dev server
+npm run dev --workspace=frontend
+
+# 3. Typecheck all workspaces
+npm run typecheck
+
+# 4. Build workspaces & Vite bundle
+npm run build
+
+# 5. Run workspace unit tests
+npm run test
+
+# 6. Validate repository structure
+npm run validate
 ```
-
-### Frontend (Unity)
-1. Open Unity Hub
-2. Add project from `frontend/` directory
-3. Open the Bootstrap scene in `Assets/Scenes/`
-
-### Database
-```bash
-# TBD — depends on selected migration tooling
-# See database/README.md for current status
-```
-
-### Tests
-```bash
-# Backend tests
-cd backend && npm test
-
-# Frontend tests — run via Unity Test Runner
-
-# Cross-system tests
-cd tests && npm test   # TBD
-```
-
-## Context System
-
-The `context/` directory maintains persistent project knowledge for AI agents and developers. See [context/README.md](context/README.md) for the full protocol.
 
 ## Documentation
 
 - [System Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)
-- [Game Vision](docs/game-design/GAME_VISION.md)
-- [API Overview](docs/api/API_OVERVIEW.md)
+- [Client Architecture](docs/architecture/CLIENT_ARCHITECTURE.md)
+- [ADR-0003: Babylon.js 3D Selection](docs/adr/ADR-0003-true-3d-babylonjs-runtime.md)
 - [Local Setup](docs/development/LOCAL_SETUP.md)
 - [Contributing](CONTRIBUTING.md)
 
-## Contribution Workflow
-
-1. Read [CONTRIBUTING.md](CONTRIBUTING.md)
-2. Check [context/CURRENT_STATE.md](context/CURRENT_STATE.md) for current phase
-3. Check [context/DECISIONS.md](context/DECISIONS.md) for confirmed decisions
-4. Create a feature branch, implement, test, submit PR
-
 ## License
 
-MIT (placeholder — see [LICENSE](LICENSE))
+MIT (see [LICENSE](LICENSE))

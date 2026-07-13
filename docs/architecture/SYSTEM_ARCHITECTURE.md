@@ -1,14 +1,14 @@
 # System Architecture
 
 ## Overview
-FLOWSTATE uses a monorepo architecture with clean separation between frontend (Unity), backend (Node.js), and shared contracts.
+FLOWSTATE uses a monorepo architecture with clean separation between the True 3D frontend client package (`frontend/` powered by Babylon.js), backend API server (`backend/`), middleware (`middleware/`), and shared contracts (`@flowstate/shared`).
 
 ## High-Level Diagram
 
-```
+```text
 ┌─────────────────┐     ┌──────────────────┐     ┌──────────────┐
-│  Unity Client   │────▶│  Express API     │────▶│  PostgreSQL  │
-│  (Android/iOS)  │◀────│  (Node.js/TS)    │◀────│  Database    │
+│ Babylon 3D      │────▶│ Express API      │────▶│ PostgreSQL   │
+│ Client Package  │◀────│ (Node.js / TS)   │◀────│ Database     │
 └─────────────────┘     └──────────────────┘     └──────────────┘
         │                        │
         ▼                        ▼
@@ -17,17 +17,7 @@ FLOWSTATE uses a monorepo architecture with clean separation between frontend (U
                            Rate Limiting)
 ```
 
-## Dependency Rules
-
-```
-Frontend Gameplay Core → (no external dependencies)
-Frontend Services → Backend API Contracts
-Backend Routes → Controllers → Services → Repositories → Database
-Middleware → (cross-cutting concerns, no business logic)
-```
-
-## Key Principles
-- Gameplay works offline
-- Server is authoritative for competitive data
-- Presentation does not own game rules
-- Modular monolith, not microservices
+## Key Architectural Principles
+- **Presentation Separation:** Gameplay state remains completely independent of Babylon meshes. Mesh transforms update based on normalized player simulation state, and 3D environment presentation reacts to gameplay harmony state without owning gameplay rules.
+- **Offline Capable:** Gameplay simulation runs independently of backend availability.
+- **Server Score Authority:** All scores submitted to leaderboards route through server verification (`POST /api/v1/game-results`).
