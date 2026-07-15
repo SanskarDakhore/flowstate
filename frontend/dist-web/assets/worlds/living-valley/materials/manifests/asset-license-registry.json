@@ -1,0 +1,46 @@
+{
+  "registry": [
+    {
+      "asset_id": "Grass005",
+      "source": "ambientCG.com",
+      "source_url": "https://ambientcg.com/a/Grass005",
+      "license": "CC0",
+      "source_resolution": "1024x1024",
+      "runtime_resolution": "1024x1024",
+      "format": "PNG",
+      "project_path": "assets/worlds/living-valley/materials/ground/meadow_albedo.png"
+    },
+    {
+      "asset_id": "Ground103",
+      "source": "ambientCG.com",
+      "source_url": "https://ambientcg.com/a/Ground103",
+      "license": "CC0",
+      "source_resolution": "1024x1024",
+      "runtime_resolution": "1024x1024",
+      "format": "PNG",
+      "project_path": "assets/worlds/living-valley/materials/ground/earth_albedo.png"
+    },
+    {
+      "asset_id": "Rock058",
+      "source": "ambientCG.com",
+      "source_url": "https://ambientcg.com/a/Rock058",
+      "license": "CC0",
+      "source_resolution": "1024x1024",
+      "runtime_resolution": "512x512",
+      "format": "PNG",
+      "project_path": "assets/worlds/living-valley/materials/rocks/stone_crag_albedo.png",
+      "maps": ["albedo", "normal (OpenGL convention)"]
+    },
+    {
+      "asset_id": "Bark014",
+      "source": "ambientCG.com",
+      "source_url": "https://ambientcg.com/a/Bark014",
+      "license": "CC0",
+      "source_resolution": "1024x1024",
+      "runtime_resolution": "512x512",
+      "format": "PNG",
+      "project_path": "assets/worlds/living-valley/materials/bark/trunk_bark_albedo.png",
+      "maps": ["albedo", "normal (OpenGL convention)"]
+    }
+  ]
+}

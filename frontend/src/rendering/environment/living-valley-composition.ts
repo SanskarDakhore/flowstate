@@ -3,6 +3,7 @@ import {
   MeshBuilder,
   Mesh,
   StandardMaterial,
+  ShaderMaterial,
   Color3,
   Vector3,
 } from '@babylonjs/core';
@@ -17,6 +18,14 @@ import { TreeSystem } from './tree-system';
 import { VegetationScatter } from './vegetation-scatter';
 import { AmbientParticleSystem } from './ambient-particle-system';
 import { applyOrganicDisplacement, seedFromId, sampleNoise3D } from './organic-noise';
+import { createTerrainSplatMaterial } from './terrain-splat-material';
+import { ResonanceTree } from './resonance-tree';
+
+/** World 01's signature landmark position: Grand Reopening zone, opposite side
+ * from the existing d1-d3 tree grove, well beyond ordinary tree lateral offsets
+ * so it stands alone as the dominant silhouette. */
+const RESONANCE_TREE_PROGRESS = 0.87;
+const RESONANCE_TREE_LATERAL_OFFSET = -65;
 
 /**
  * World 01 — The Living Valley: Macro World Composition Engine.
@@ -33,8 +42,9 @@ export class LivingValleyComposition {
   public readonly treeSystem: TreeSystem;
   public readonly vegetationScatter: VegetationScatter;
   public readonly ambientParticles: AmbientParticleSystem;
+  public readonly resonanceTree: ResonanceTree;
 
-  private terrainMaterial: StandardMaterial;
+  private terrainMaterial: ShaderMaterial;
   // Landform materials are split by role so the 11 bluffs/cliffs/ridges don't
   // read as one repeated flat-colored shape: cliffs stay darker/sharper,
   // bluffs read warmer/sunlit, rolling ridges sit at a mid-tone between them.
@@ -50,16 +60,26 @@ export class LivingValleyComposition {
     this.treeSystem = new TreeSystem(scene);
     this.vegetationScatter = new VegetationScatter(scene);
     this.ambientParticles = new AmbientParticleSystem(scene);
+    this.resonanceTree = new ResonanceTree(scene);
 
-    // 1. Terrain Base Material — white diffuse so the per-vertex color gradient
-    // (sage floor -> bluff slope -> fog rim, computed in createValleyFloor) reads
-    // at full range under normal directional/hemispheric lighting. Unlike the sky
-    // dome, lighting stays enabled here since the terrain must read as a grounded,
-    // lit surface rather than a self-illuminated backdrop.
-    this.terrainMaterial = new StandardMaterial('valleyTerrainMat', scene);
-    this.terrainMaterial.diffuseColor = new Color3(1, 1, 1);
-    this.terrainMaterial.specularColor = new Color3(0.02, 0.03, 0.02);
-    this.terrainMaterial.emissiveColor = new Color3(0.03, 0.03, 0.02);
+    // 1. Terrain Splat Material — custom ShaderMaterial blending CC0 meadow/earth/
+    // stone albedo textures via the per-vertex rise-curve and slope data computed
+    // in createValleyFloor (sage->bluff->fog rim-fade from Checkpoint A is preserved
+    // as the boundary-concealment blend target). Light direction/color approximate
+    // GameplayLighting's directional+hemispheric setup since this material bypasses
+    // Babylon's automatic light binding.
+    this.terrainMaterial = createTerrainSplatMaterial(
+      'valleyTerrainSplatMat',
+      scene,
+      {
+        meadowAlbedo: '/assets/worlds/living-valley/materials/ground/meadow_albedo.png',
+        earthAlbedo: '/assets/worlds/living-valley/materials/ground/earth_albedo.png',
+        stoneAlbedo: '/assets/worlds/living-valley/materials/rocks/stone_crag_albedo.png',
+      },
+      new Vector3(-0.6, -0.35, 0.7),
+      GOLDEN_HOUR_VALLEY_PALETTE.sunlightKey.scale(0.6),
+      GOLDEN_HOUR_VALLEY_PALETTE.ambientSky.scale(0.4)
+    );
 
     // 2. Midground Landform Materials (role-based, still just 3 shared materials total)
     this.landformMaterialCliff = new StandardMaterial('landformCliffMat', scene);
@@ -92,6 +112,19 @@ export class LivingValleyComposition {
     this.treeSystem.buildTreeSystem(path);
     this.vegetationScatter.buildScatter(path);
     this.ambientParticles.initParticleSystem();
+
+    // World 01 signature landmark (Checkpoint C)
+    const landmarkFrame = path.getTrackFrame(RESONANCE_TREE_PROGRESS);
+    const minClearance =
+      LIVING_VALLEY_CONFIG.trackClearance.baseRadius + LIVING_VALLEY_CONFIG.trackClearance.cameraSafetyMargin;
+    const landmarkLateral =
+      Math.sign(RESONANCE_TREE_LATERAL_OFFSET) *
+      Math.max(minClearance, Math.abs(RESONANCE_TREE_LATERAL_OFFSET));
+    this.resonanceTree.build({
+      x: landmarkFrame.center.x + landmarkFrame.right.x * landmarkLateral,
+      y: landmarkFrame.center.y + landmarkFrame.right.y * landmarkLateral - 8,
+      z: landmarkFrame.center.z + landmarkFrame.right.z * landmarkLateral,
+    });
   }
 
   /**
@@ -101,6 +134,53 @@ export class LivingValleyComposition {
     if (playerPosition) {
       this.ambientParticles.updateCenter(playerPosition);
     }
+    this.vegetationScatter.update(deltaTimeSeconds);
+  }
+
+  /**
+   * Approximate world-space (x, z) contact points for trees and stone
+   * clusters, used to bake ground-truth grounding into the terrain's vertex
+   * data before any tree/rock meshes exist yet (createValleyFloor runs first
+   * in buildComposition). Positions are derived directly from the same
+   * authored config the placement systems themselves read, so no cross-class
+   * coupling to TreeSystem/VegetationScatter internals is needed — exact
+   * per-instance jitter isn't required since this only drives a soft,
+   * approximate "exposed ground near this object" falloff, not exact overlap.
+   */
+  private computeGroundInjectionPoints(
+    path: FlowPath
+  ): Array<{ x: number; z: number; radius: number; strength: number }> {
+    const points: Array<{ x: number; z: number; radius: number; strength: number }> = [];
+    const minClearance =
+      LIVING_VALLEY_CONFIG.trackClearance.baseRadius + LIVING_VALLEY_CONFIG.trackClearance.cameraSafetyMargin;
+
+    // Trees: exposed soil under the canopy shade line
+    LIVING_VALLEY_CONFIG.trees.forEach((def) => {
+      const trackFrame = path.getTrackFrame(def.progressAnchor);
+      const effectiveLateralOffset =
+        Math.sign(def.lateralOffset) * Math.max(minClearance, Math.abs(def.lateralOffset));
+      points.push({
+        x: trackFrame.center.x + trackFrame.right.x * effectiveLateralOffset,
+        z: trackFrame.center.z + trackFrame.right.z * effectiveLateralOffset,
+        radius: 7 * def.scale,
+        strength: 0.6,
+      });
+    });
+
+    // Stone clusters: exposed rock/dirt around each cluster's authored anchor
+    LIVING_VALLEY_CONFIG.vegetation.stoneClusters.forEach((cluster) => {
+      const trackFrame = path.getTrackFrame(cluster.progressCenter);
+      const side = cluster.side === 'left' ? -1 : cluster.side === 'right' ? 1 : 1;
+      const offsetDist = (cluster.lateralMin + cluster.lateralMax) * 0.5;
+      points.push({
+        x: trackFrame.center.x + trackFrame.right.x * side * offsetDist,
+        z: trackFrame.center.z + trackFrame.right.z * side * offsetDist,
+        radius: 6,
+        strength: 0.9,
+      });
+    });
+
+    return points;
   }
 
   /**
@@ -118,7 +198,9 @@ export class LivingValleyComposition {
 
     const paths: Vector3[][] = [];
     const colors: number[] = [];
+    const groundInjection: number[] = [];
     const halfWidth = width * 0.5;
+    const injectionPoints = this.computeGroundInjectionPoints(path);
 
     const floorColor = GOLDEN_HOUR_VALLEY_PALETTE.sage;
     const slopeColor = GOLDEN_HOUR_VALLEY_PALETTE.landformBluff;
@@ -171,12 +253,27 @@ export class LivingValleyComposition {
 
         // Restrained low-frequency brightness breakup (large soft regions, not surface noise)
         const breakup = (sampleNoise3D(vx * 0.012, 0, vz * 0.012) - 0.5) * 0.16;
+        // Alpha carries the precise riseCurve (not opacity — terrain is fully
+        // opaque) so the splat shader can read the exact floor->rim blend factor
+        // instead of reverse-engineering it from the RGB gradient.
         colors.push(
           Math.max(0, Math.min(1, cr + breakup)),
           Math.max(0, Math.min(1, cg + breakup)),
           Math.max(0, Math.min(1, cb + breakup)),
-          1.0
+          riseCurve
         );
+
+        // Ground injection (Checkpoint C): nearby rocks/trees locally push the
+        // splat shader toward exposed earth, independent of the macro rise curve.
+        let injection = 0;
+        for (const p of injectionPoints) {
+          const dx = vx - p.x;
+          const dz = vz - p.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+          const falloff = Math.max(0, 1 - dist / p.radius) * p.strength;
+          if (falloff > injection) injection = falloff;
+        }
+        groundInjection.push(injection);
       }
       paths.push(rowPath);
     }
@@ -192,6 +289,7 @@ export class LivingValleyComposition {
       this.scene
     );
     this.valleyFloorMesh.setVerticesData('color', colors);
+    this.valleyFloorMesh.setVerticesData('groundInjection', groundInjection, false, 1);
     this.valleyFloorMesh.material = this.terrainMaterial;
   }
 
@@ -344,6 +442,7 @@ export class LivingValleyComposition {
     this.ambientParticles.dispose();
     this.vegetationScatter.dispose();
     this.treeSystem.dispose();
+    this.resonanceTree.dispose();
 
     if (this.valleyFloorMesh) {
       this.valleyFloorMesh.dispose();
@@ -354,7 +453,7 @@ export class LivingValleyComposition {
     this.mountainMeshes.forEach((m) => m.dispose());
     this.mountainMeshes = [];
 
-    this.terrainMaterial.dispose();
+    this.terrainMaterial.dispose(true, true);
     this.landformMaterialCliff.dispose();
     this.landformMaterialBluff.dispose();
     this.landformMaterialRidge.dispose();

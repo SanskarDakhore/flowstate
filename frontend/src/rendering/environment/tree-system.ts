@@ -4,8 +4,10 @@ import {
   Mesh,
   InstancedMesh,
   StandardMaterial,
+  Texture,
   Color3,
   Vector3,
+  VertexBuffer,
 } from '@babylonjs/core';
 import { FlowPath } from '../../game/movement/flow-path';
 import {
@@ -15,17 +17,22 @@ import {
 } from './living-valley-config';
 import { applyOrganicDisplacement, seededUnit } from './organic-noise';
 
+type TrunkTier = 'young' | 'mature' | 'old';
+
 /**
  * Layer 3 — Midground Tree System.
- * Constructs master stylized low-poly tree templates (curved trunk + a small
- * family of organic canopy silhouettes) and instances them along track
- * clearance corridors for optimal mobile performance. All canopy variants
- * share one material — only geometry differs — so material count and draw
+ * Constructs master stylized low-poly tree templates and instances them along
+ * track clearance corridors for optimal mobile performance. Trunk tier
+ * (young/mature/old) is derived from each instance's configured `scale`, and
+ * canopy silhouette (broad/narrow/windswept) is chosen explicitly per
+ * instance — the two vary independently for a naturally varied grove.
+ * All canopy variants share one material (only geometry differs), and all
+ * trunk tiers share one bark-textured material, so material count and draw
  * calls stay flat regardless of silhouette variety.
  */
 export class TreeSystem {
   private scene: Scene;
-  private masterTrunkMesh: Mesh | null = null;
+  private masterTrunkMeshes: Map<TrunkTier, Mesh> = new Map();
   private masterCanopyMeshes: Map<TreeCanopyVariant, Mesh> = new Map();
 
   private instances: InstancedMesh[] = [];
@@ -36,9 +43,17 @@ export class TreeSystem {
   constructor(scene: Scene) {
     this.scene = scene;
 
-    // 1. Warm Bark Wood Material
+    // 1. Bark Material — CC0 PBR albedo + normal (ambientCG Bark014), shared
+    // across all trunk tiers.
     this.trunkMaterial = new StandardMaterial('treeTrunkMat', scene);
-    this.trunkMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.treeTrunk;
+    this.trunkMaterial.diffuseTexture = new Texture(
+      '/assets/worlds/living-valley/materials/bark/trunk_bark_albedo.png',
+      scene
+    );
+    this.trunkMaterial.bumpTexture = new Texture(
+      '/assets/worlds/living-valley/materials/bark/trunk_bark_normal.png',
+      scene
+    );
     this.trunkMaterial.specularColor = new Color3(0.02, 0.02, 0.02);
 
     // 2. Sunlit Foliage Material (shared across all canopy silhouette variants)
@@ -56,25 +71,39 @@ export class TreeSystem {
   }
 
   private createMasterTreeTemplates(): void {
-    // Master Trunk Template (Tapered low-poly cylinder) — shared by all canopy variants
-    this.masterTrunkMesh = MeshBuilder.CreateCylinder(
-      'masterTreeTrunk',
-      {
-        height: 8.0,
-        diameterTop: 0.8,
-        diameterBottom: 1.6,
-        tessellation: 6,
-      },
-      this.scene
-    );
-    this.masterTrunkMesh.position.y = 4.0;
-    this.masterTrunkMesh.material = this.trunkMaterial;
-    this.masterTrunkMesh.isPickable = false;
-    this.masterTrunkMesh.isVisible = false; // Master mesh template stays hidden
+    // Trunk tiers: young (narrow, minimal taper), mature (balanced, pronounced
+    // lean applied at instance time), old (heavy wide base suggesting deep roots).
+    this.masterTrunkMeshes.set('young', this.buildTrunkTemplate('young', 6.5, 0.5, 0.9, 6));
+    this.masterTrunkMeshes.set('mature', this.buildTrunkTemplate('mature', 8.5, 0.75, 1.6, 6));
+    this.masterTrunkMeshes.set('old', this.buildTrunkTemplate('old', 10.0, 1.0, 2.3, 7));
 
     this.masterCanopyMeshes.set('broad', this.buildBroadCanopy());
     this.masterCanopyMeshes.set('narrow', this.buildNarrowCanopy());
     this.masterCanopyMeshes.set('windswept', this.buildWindsweptCanopy());
+  }
+
+  private buildTrunkTemplate(
+    tier: TrunkTier,
+    height: number,
+    diameterTop: number,
+    diameterBottom: number,
+    tessellation: number
+  ): Mesh {
+    const mesh = MeshBuilder.CreateCylinder(
+      `masterTreeTrunk_${tier}`,
+      { height, diameterTop, diameterBottom, tessellation },
+      this.scene
+    );
+    mesh.material = this.trunkMaterial;
+    mesh.isPickable = false;
+    mesh.isVisible = false;
+    return mesh;
+  }
+
+  private resolveTrunkTier(scale: number): TrunkTier {
+    if (scale < 1.05) return 'young';
+    if (scale < 1.45) return 'mature';
+    return 'old';
   }
 
   /** Wide, rounded hero canopy — mature tree silhouette. */
@@ -91,6 +120,7 @@ export class TreeSystem {
     const mesh = Mesh.MergeMeshes([s1, s2, s3], true, true, undefined, false, true)!;
     mesh.name = 'masterTreeCanopy_broad';
     applyOrganicDisplacement(mesh, { amplitude: 0.55, frequency: 0.22, seed: 4.2 });
+    this.applyOutwardCanopyNormals(mesh);
     return this.finalizeCanopyTemplate(mesh);
   }
 
@@ -108,6 +138,7 @@ export class TreeSystem {
     const mesh = Mesh.MergeMeshes([s1, s2, s3], true, true, undefined, false, true)!;
     mesh.name = 'masterTreeCanopy_narrow';
     applyOrganicDisplacement(mesh, { amplitude: 0.4, frequency: 0.26, seed: 9.7 });
+    this.applyOutwardCanopyNormals(mesh);
     return this.finalizeCanopyTemplate(mesh);
   }
 
@@ -125,7 +156,46 @@ export class TreeSystem {
     const mesh = Mesh.MergeMeshes([s1, s2, s3], true, true, undefined, false, true)!;
     mesh.name = 'masterTreeCanopy_windswept';
     applyOrganicDisplacement(mesh, { amplitude: 0.5, frequency: 0.2, seed: 16.3 });
+    this.applyOutwardCanopyNormals(mesh);
     return this.finalizeCanopyTemplate(mesh);
+  }
+
+  /**
+   * Rewrites every canopy vertex normal to point directly outward from the
+   * merged mesh's volumetric center, instead of the smooth-averaged normals
+   * `createNormals()` produces at overlapping-sphere seams. Fixes the
+   * "broccoli effect" — messy, high-frequency shadow noise where the merged
+   * foliage lobes meet — with smooth, single-mass studio-style shading.
+   */
+  private applyOutwardCanopyNormals(mesh: Mesh): void {
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    if (!positions) return;
+
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    const vertexCount = positions.length / 3;
+    for (let i = 0; i < positions.length; i += 3) {
+      cx += positions[i];
+      cy += positions[i + 1];
+      cz += positions[i + 2];
+    }
+    cx /= vertexCount;
+    cy /= vertexCount;
+    cz /= vertexCount;
+
+    const normals = new Float32Array(positions.length);
+    for (let i = 0; i < positions.length; i += 3) {
+      const dx = positions[i] - cx;
+      const dy = positions[i + 1] - cy;
+      const dz = positions[i + 2] - cz;
+      const len = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      normals[i] = dx / len;
+      normals[i + 1] = dy / len;
+      normals[i + 2] = dz / len;
+    }
+
+    mesh.updateVerticesData(VertexBuffer.NormalKind, normals);
   }
 
   private finalizeCanopyTemplate(mesh: Mesh): Mesh {
@@ -136,15 +206,15 @@ export class TreeSystem {
   }
 
   private instantiateTrees(path: FlowPath): void {
-    if (!this.masterTrunkMesh) return;
-
     const minClearance =
       LIVING_VALLEY_CONFIG.trackClearance.baseRadius +
       LIVING_VALLEY_CONFIG.trackClearance.cameraSafetyMargin;
 
     LIVING_VALLEY_CONFIG.trees.forEach((def) => {
       const canopyTemplate = this.masterCanopyMeshes.get(def.canopyVariant);
-      if (!canopyTemplate) return;
+      const tier = this.resolveTrunkTier(def.scale);
+      const trunkTemplate = this.masterTrunkMeshes.get(tier);
+      if (!canopyTemplate || !trunkTemplate) return;
 
       const trackFrame = path.getTrackFrame(def.progressAnchor);
 
@@ -165,13 +235,40 @@ export class TreeSystem {
           trackFrame.up.z * def.verticalOffset
       );
 
-      // Small deterministic lean so trees don't all stand at a perfect vertical —
-      // trunk and canopy share the same lean value so they tilt together.
-      const leanX = (seededUnit(def.id, 1) - 0.5) * 0.14;
-      const leanZ = (seededUnit(def.id, 2) - 0.5) * 0.14;
+      // Tier-specific lean: mature trees get the most pronounced structural
+      // lean (biased away from the nearest valley wall, toward the open
+      // track), old trees lean moderately (heavier, more established).
+      // Trunk and canopy share the same lean value so they tilt together.
+      const leanMagnitude = tier === 'mature' ? 0.10 : tier === 'old' ? 0.05 : 0.025;
+      let leanBiasX = -Math.sign(def.lateralOffset) * leanMagnitude * 0.6;
+
+      // Young trees on a grove's outer edge lean further outward, away from
+      // the grove's own lateral centroid, toward the nearest open clearing —
+      // rather than toward/away from the valley wall like their elders.
+      if (tier === 'young') {
+        const groveMates = LIVING_VALLEY_CONFIG.trees.filter(
+          (other) =>
+            other.id !== def.id &&
+            Math.sign(other.lateralOffset) === Math.sign(def.lateralOffset) &&
+            Math.abs(other.progressAnchor - def.progressAnchor) < 0.03
+        );
+        if (groveMates.length > 0) {
+          const centroidLateral =
+            (def.lateralOffset + groveMates.reduce((sum, m) => sum + m.lateralOffset, 0)) /
+            (groveMates.length + 1);
+          const isOuterEdge = Math.abs(def.lateralOffset) > Math.abs(centroidLateral);
+          if (isOuterEdge) {
+            const outwardMagnitude = 0.07 + seededUnit(def.id, 5) * 0.03; // ~4-6 deg
+            leanBiasX = Math.sign(def.lateralOffset) * outwardMagnitude;
+          }
+        }
+      }
+
+      const leanX = leanBiasX + (seededUnit(def.id, 1) - 0.5) * leanMagnitude * 0.8;
+      const leanZ = (seededUnit(def.id, 2) - 0.5) * leanMagnitude * 0.6;
 
       // Instance Trunk
-      const trunkInst = this.masterTrunkMesh!.createInstance(`trunk_${def.id}`);
+      const trunkInst = trunkTemplate.createInstance(`trunk_${def.id}`);
       trunkInst.position = worldPos;
       trunkInst.scaling.set(def.scale, def.scale, def.scale);
       trunkInst.rotation.set(leanX, def.rotationY, leanZ);
@@ -192,10 +289,8 @@ export class TreeSystem {
     this.instances.forEach((inst) => inst.dispose());
     this.instances = [];
 
-    if (this.masterTrunkMesh) {
-      this.masterTrunkMesh.dispose();
-      this.masterTrunkMesh = null;
-    }
+    this.masterTrunkMeshes.forEach((mesh) => mesh.dispose());
+    this.masterTrunkMeshes.clear();
     this.masterCanopyMeshes.forEach((mesh) => mesh.dispose());
     this.masterCanopyMeshes.clear();
 

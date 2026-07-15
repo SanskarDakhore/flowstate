@@ -48,6 +48,15 @@ export function sampleNoise3D(x: number, y: number, z: number): number {
   return noise3D(x, y, z);
 }
 
+/**
+ * GLSL-style two-edge smoothstep (there is no `Math.smoothstep` in JS/TS).
+ * Returns 0 below edge0, 1 above edge1, Hermite-eased in between.
+ */
+export function smoothstepEdge(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return smoothstep(t);
+}
+
 /** Deterministic small numeric seed derived from a string id, for reproducible per-instance variation. */
 export function seedFromId(id: string): number {
   let h = 0;

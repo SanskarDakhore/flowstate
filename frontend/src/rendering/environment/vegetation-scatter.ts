@@ -3,6 +3,7 @@ import {
   MeshBuilder,
   Mesh,
   StandardMaterial,
+  Texture,
   Color3,
   Vector3,
 } from '@babylonjs/core';
@@ -12,7 +13,14 @@ import {
   GOLDEN_HOUR_VALLEY_PALETTE,
   ScatterPatchDefinition,
 } from './living-valley-config';
-import { applyOrganicDisplacement, seededUnit } from './organic-noise';
+import { seededUnit, seedFromId } from './organic-noise';
+import { buildGrassClump } from './grass-blade-geometry';
+import { createGrassWindMaterial, GrassWindMaterialHandle } from './grass-wind-material';
+
+// Alternating angular polyhedron types (Octahedron, Icosahedron) for rock
+// silhouette variety — flat-shaded so facets stay sharp and planar, per the
+// "planar facets, not round blobs" rock-language guidance.
+const STONE_POLYHEDRON_TYPES = [1, 3];
 
 /**
  * Layer 2 — Near Vegetation Scatter System.
@@ -26,21 +34,39 @@ export class VegetationScatter {
   private stoneMesh: Mesh | null = null;
   private flowerMesh: Mesh | null = null;
 
-  private grassMaterial: StandardMaterial;
+  private grassMaterialHandle: GrassWindMaterialHandle;
   private stoneMaterial: StandardMaterial;
   private flowerMaterial: StandardMaterial;
+  private windElapsedSeconds = 0;
 
   constructor(scene: Scene) {
     this.scene = scene;
 
-    // 1. Sunlit Sage Grass Material
-    this.grassMaterial = new StandardMaterial('grassScatterMat', scene);
-    this.grassMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.sage;
-    this.grassMaterial.specularColor = new Color3(0.02, 0.03, 0.02);
+    // 1. Wind-Animated Grass Material — custom ShaderMaterial (see
+    // grass-wind-material.ts) instead of StandardMaterial: blade sway comes
+    // from a vertex shader reading the phase/flex data baked into each
+    // clump's vertex colors by buildGrassClump().
+    this.grassMaterialHandle = createGrassWindMaterial(
+      'grassWindMat',
+      scene,
+      GOLDEN_HOUR_VALLEY_PALETTE.sage,
+      new Vector3(-0.6, -0.35, 0.7),
+      GOLDEN_HOUR_VALLEY_PALETTE.sunlightKey.scale(0.6),
+      GOLDEN_HOUR_VALLEY_PALETTE.ambientSky.scale(0.4)
+    );
 
-    // 2. Warm River Stone Material
+    // 2. Weathered Stone Material — CC0 PBR albedo + normal (ambientCG Rock058),
+    // shared across every stone cluster and the "steep slope" splat in the
+    // ground shader, per the "single unified stone texture family" rule.
     this.stoneMaterial = new StandardMaterial('stoneScatterMat', scene);
-    this.stoneMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.stone;
+    this.stoneMaterial.diffuseTexture = new Texture(
+      '/assets/worlds/living-valley/materials/rocks/stone_crag_albedo.png',
+      scene
+    );
+    this.stoneMaterial.bumpTexture = new Texture(
+      '/assets/worlds/living-valley/materials/rocks/stone_crag_normal.png',
+      scene
+    );
     this.stoneMaterial.specularColor = new Color3(0.08, 0.09, 0.10);
 
     // 3. Warm Peach Flower Bud Material
@@ -61,7 +87,7 @@ export class VegetationScatter {
     if (grassClumpsToMerge.length > 0) {
       this.grassMesh = Mesh.MergeMeshes(grassClumpsToMerge, true, true, undefined, false, true);
       if (this.grassMesh) {
-        this.grassMesh.material = this.grassMaterial;
+        this.grassMesh.material = this.grassMaterialHandle.material;
         this.grassMesh.isPickable = false;
       }
     }
@@ -119,16 +145,18 @@ export class VegetationScatter {
           trackFrame.center.z + trackFrame.right.z * side * offsetDist
         );
 
-        // Tapered grass tuft (narrow top, wider base) instead of a flat-sided box
-        const g = MeshBuilder.CreateCylinder(
-          `g_${patch.id}_${i}`,
-          { diameterTop: 0.15, diameterBottom: 0.55, height: 1.4, tessellation: 5 },
-          this.scene
-        );
+        // Small fan of crossed, tapered opaque quads — replaces the earlier
+        // tapered-cone tuft, which read as a spike rather than grass.
+        const g = buildGrassClump(`g_${patch.id}_${i}`, this.scene, {
+          bladeCount: 6,
+          baseHeight: 1.1,
+          heightJitter: 0.35,
+          baseWidth: 0.4,
+          colorVariance: seededUnit(patch.id, i + 350),
+          seed: seedFromId(patch.id) + i,
+        });
         g.position = pos;
         g.rotation.y = seededUnit(patch.id, i + 300) * Math.PI;
-        // Slight natural lean so tufts don't all stand perfectly upright
-        g.rotation.z = (seededUnit(patch.id, i + 400) - 0.5) * 0.1;
         meshes.push(g);
       }
     });
@@ -146,34 +174,37 @@ export class VegetationScatter {
         const side = this.resolveSide(cluster, i);
         const offsetDist = this.jitterLateral(cluster, i);
 
-        const pos = new Vector3(
-          trackFrame.center.x + trackFrame.right.x * side * offsetDist,
-          trackFrame.center.y - 1.8,
-          trackFrame.center.z + trackFrame.right.z * side * offsetDist
-        );
-
         // First stone in each cluster reads as a larger anchor; the rest are smaller companions —
         // natural stone families have scale hierarchy rather than uniform-sized pebbles.
         const scaleMul = i === 0 ? 1.35 : 0.55 + seededUnit(cluster.id, i + 500) * 0.35;
+        const sizeX = 1.5 * scaleMul;
+        const sizeY = 1.0 * scaleMul;
+        const sizeZ = 1.8 * scaleMul;
 
-        const st = MeshBuilder.CreateSphere(
+        // Ground burial: sink the stone into the terrain proportional to its own
+        // height so it reads as emerging from the ground rather than resting on top.
+        const burialDepth = sizeY * 0.35;
+
+        const pos = new Vector3(
+          trackFrame.center.x + trackFrame.right.x * side * offsetDist,
+          trackFrame.center.y - 1.8 - burialDepth,
+          trackFrame.center.z + trackFrame.right.z * side * offsetDist
+        );
+
+        // Angular, flat-shaded polyhedron (planar facets) instead of a displaced
+        // sphere — natural rock silhouette variety comes from alternating type +
+        // non-uniform sizeX/Y/Z + rotation, not surface noise (which would smooth
+        // away the hard facet edges `flat: true` is providing).
+        const typeIndex = Math.floor(seededUnit(cluster.id, i + 800) * STONE_POLYHEDRON_TYPES.length);
+        const st = MeshBuilder.CreatePolyhedron(
           `st_${cluster.id}_${i}`,
-          {
-            segments: 4,
-            diameterX: 2.2 * scaleMul,
-            diameterY: 1.1 * scaleMul,
-            diameterZ: 2.8 * scaleMul,
-          },
+          { type: STONE_POLYHEDRON_TYPES[typeIndex], sizeX, sizeY, sizeZ, flat: true },
           this.scene
         );
-        // Break up the sphere silhouette into a natural rock shape
-        applyOrganicDisplacement(st, {
-          amplitude: 0.22 * scaleMul,
-          frequency: 0.6,
-          seed: seededUnit(cluster.id, i) * 40,
-        });
         st.position = pos;
         st.rotation.y = seededUnit(cluster.id, i + 600) * Math.PI;
+        st.rotation.x = (seededUnit(cluster.id, i + 900) - 0.5) * 0.3;
+        st.rotation.z = (seededUnit(cluster.id, i + 950) - 0.5) * 0.3;
         meshes.push(st);
       }
     });
@@ -218,6 +249,12 @@ export class VegetationScatter {
     return meshes;
   }
 
+  /** Advances the grass wind animation's time uniform. */
+  public update(deltaTimeSeconds: number): void {
+    this.windElapsedSeconds += deltaTimeSeconds;
+    this.grassMaterialHandle.setTime(this.windElapsedSeconds);
+  }
+
   public dispose(): void {
     if (this.grassMesh) {
       this.grassMesh.dispose();
@@ -232,7 +269,7 @@ export class VegetationScatter {
       this.flowerMesh = null;
     }
 
-    this.grassMaterial.dispose();
+    this.grassMaterialHandle.material.dispose(true, true);
     this.stoneMaterial.dispose();
     this.flowerMaterial.dispose();
   }
