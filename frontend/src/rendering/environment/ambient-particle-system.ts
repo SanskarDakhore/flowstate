@@ -7,7 +7,7 @@ import {
 } from '@babylonjs/core';
 import {
   LIVING_VALLEY_CONFIG,
-  DORMANT_VALLEY_PALETTE,
+  GOLDEN_HOUR_VALLEY_PALETTE,
 } from './living-valley-config';
 
 /**
@@ -29,7 +29,7 @@ export class AmbientParticleSystem {
     this.particleSystem = new ParticleSystem('ambientSpores', config.maxParticles, this.scene);
 
     // Subtle procedurally generated particle texture fallback
-    const sporeColor = DORMANT_VALLEY_PALETTE.sporeParticle;
+    const sporeColor = GOLDEN_HOUR_VALLEY_PALETTE.sporeParticle;
     this.particleSystem.color1 = new Color4(sporeColor.r, sporeColor.g, sporeColor.b, 0.6);
     this.particleSystem.color2 = new Color4(sporeColor.r, sporeColor.g, sporeColor.b, 0.2);
     this.particleSystem.colorDead = new Color4(sporeColor.r, sporeColor.g, sporeColor.b, 0.0);

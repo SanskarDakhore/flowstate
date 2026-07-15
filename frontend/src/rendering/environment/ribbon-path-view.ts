@@ -7,7 +7,7 @@ import {
   Vector3,
 } from '@babylonjs/core';
 import { FlowPath } from '../../game/movement/flow-path';
-import { DORMANT_VALLEY_PALETTE } from './living-valley-config';
+import { GOLDEN_HOUR_VALLEY_PALETTE } from './living-valley-config';
 
 export class RibbonPathView {
   private scene: Scene;
@@ -29,8 +29,8 @@ export class RibbonPathView {
 
     // 2. Bioluminescent Cyan Emissive Border Rail Material
     this.borderMaterial = new StandardMaterial('borderMat', scene);
-    this.borderMaterial.diffuseColor = DORMANT_VALLEY_PALETTE.bioluminescence.scale(0.8);
-    this.borderMaterial.emissiveColor = DORMANT_VALLEY_PALETTE.bioluminescence.clone(); // Calibrated bioluminescent cyan
+    this.borderMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.bioluminescence.scale(0.8);
+    this.borderMaterial.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.bioluminescence.clone(); // Calibrated bioluminescent cyan
     this.borderMaterial.specularColor = new Color3(0.8, 0.9, 1.0);
     this.borderMaterial.backFaceCulling = false;
   }

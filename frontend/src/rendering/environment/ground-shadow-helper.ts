@@ -56,7 +56,7 @@ export class GroundShadowHelper {
 
     // 3. Ground Shadow Material
     this.shadowMaterial = new StandardMaterial(`${id}_mat`, scene);
-    this.shadowMaterial.diffuseColor = Color3.FromHexString('#0E1420'); // Cool desaturated shadow tone
+    this.shadowMaterial.diffuseColor = Color3.FromHexString('#2A1D16'); // Warm umber shadow tone
     this.shadowMaterial.emissiveColor = new Color3(0, 0, 0);
     this.shadowMaterial.specularColor = new Color3(0, 0, 0);
     this.shadowMaterial.opacityTexture = this.shadowTexture;

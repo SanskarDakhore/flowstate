@@ -4,7 +4,7 @@ import { GameplayLighting } from '../lighting/gameplay-lighting';
 import { RibbonPathView } from './ribbon-path-view';
 import { WorldEnvironmentProps } from './world-props';
 import { LivingValleyComposition } from './living-valley-composition';
-import { DORMANT_VALLEY_PALETTE } from './living-valley-config';
+import { GOLDEN_HOUR_VALLEY_PALETTE } from './living-valley-config';
 import { FlowPath } from '../../game/movement/flow-path';
 
 export class EnvironmentView implements WorldPresentation {
@@ -23,9 +23,9 @@ export class EnvironmentView implements WorldPresentation {
     this.scene = scene;
     this.lighting = lighting;
 
-    // 1. Atmosphere Fog setup synchronized to pre-dawn Horizon Ember Seam
+    // 1. Atmosphere Fog setup synchronized to warm golden-hour horizon glow
     this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogColor = DORMANT_VALLEY_PALETTE.skyHorizon.clone();
+    this.scene.fogColor = GOLDEN_HOUR_VALLEY_PALETTE.skyHorizon.clone();
     this.scene.fogDensity = 0.0016; // Calibrated soft atmospheric depth over 1200m expanse
 
     // 2. Atmospheric Sky Dome with 3-stop vertical height gradient (Horizon -> Mid -> Zenith)
@@ -35,13 +35,13 @@ export class EnvironmentView implements WorldPresentation {
       scene
     );
 
-    // Compute 3-stop vertical height vertex colors: Horizon Seam (#5C5560) -> Mid Dusk (#3E5068) -> Zenith Indigo (#16202E)
+    // Compute 3-stop vertical height vertex colors: Golden Horizon -> Coral Mid -> Deep Blue Zenith
     const positions = this.skyDome.getVerticesData('position');
     if (positions) {
       const colors: number[] = [];
-      const zenith = DORMANT_VALLEY_PALETTE.skyZenith;   // #16202E Indigo
-      const mid = DORMANT_VALLEY_PALETTE.skyMid;         // #3E5068 Dusk Blue
-      const horizon = DORMANT_VALLEY_PALETTE.skyHorizon; // #5C5560 Ember Seam
+      const zenith = GOLDEN_HOUR_VALLEY_PALETTE.skyZenith;   // Deep dusk-blue
+      const mid = GOLDEN_HOUR_VALLEY_PALETTE.skyMid;         // Warm coral-rose transition
+      const horizon = GOLDEN_HOUR_VALLEY_PALETTE.skyHorizon; // Golden amber glow
 
       for (let i = 0; i < positions.length; i += 3) {
         const y = positions[i + 1]; // Local Y coordinate
@@ -50,13 +50,13 @@ export class EnvironmentView implements WorldPresentation {
 
         let r: number, g: number, b: number;
         if (t < 0.35) {
-          // Lower band: Horizon Ember Seam -> Muted Dusk Blue
+          // Lower band: Golden Amber Horizon -> Warm Coral-Rose
           const factor = t / 0.35;
           r = horizon.r + (mid.r - horizon.r) * factor;
           g = horizon.g + (mid.g - horizon.g) * factor;
           b = horizon.b + (mid.b - horizon.b) * factor;
         } else {
-          // Upper band: Muted Dusk Blue -> Pre-dawn Indigo Zenith
+          // Upper band: Warm Coral-Rose -> Deep Dusk-Blue Zenith
           const factor = (t - 0.35) / 0.65;
           r = mid.r + (zenith.r - mid.r) * factor;
           g = mid.g + (zenith.g - mid.g) * factor;
@@ -77,7 +77,7 @@ export class EnvironmentView implements WorldPresentation {
     // 3. Ground Mesh (Disabled in favor of contoured continuous valley floor ribbon)
     this.groundMesh = MeshBuilder.CreateGround('ground', { width: 100, height: 100, subdivisions: 4 }, scene);
     this.groundMat = new StandardMaterial('groundMat', scene);
-    this.groundMat.diffuseColor = DORMANT_VALLEY_PALETTE.sage;
+    this.groundMat.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.sage;
     this.groundMesh.material = this.groundMat;
     this.groundMesh.isVisible = false; // Contoured Valley Floor replaces flat ground plane
 
@@ -117,8 +117,8 @@ export class EnvironmentView implements WorldPresentation {
   }
 
   private applyHarmonyVisuals(val: number): void {
-    // Dormant horizon seam -> Gentle harmony color boost
-    const baseHorizon = DORMANT_VALLEY_PALETTE.skyHorizon;
+    // Golden-hour horizon base -> Gentle harmony color boost
+    const baseHorizon = GOLDEN_HOUR_VALLEY_PALETTE.skyHorizon;
     const fogR = baseHorizon.r + val * 0.04;
     const fogG = baseHorizon.g + val * 0.08;
     const fogB = baseHorizon.b + val * 0.12;
@@ -127,7 +127,7 @@ export class EnvironmentView implements WorldPresentation {
     this.scene.fogColor = fogColor;
     this.scene.clearColor = new Color4(fogR, fogG, fogB, 1.0);
 
-    const baseSky = DORMANT_VALLEY_PALETTE.skyHorizon;
+    const baseSky = GOLDEN_HOUR_VALLEY_PALETTE.skyHorizon;
     const skyR = baseSky.r + val * 0.05;
     const skyG = baseSky.g + val * 0.10;
     const skyB = baseSky.b + val * 0.15;

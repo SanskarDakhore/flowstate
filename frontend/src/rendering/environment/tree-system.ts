@@ -10,19 +10,23 @@ import {
 import { FlowPath } from '../../game/movement/flow-path';
 import {
   LIVING_VALLEY_CONFIG,
-  DORMANT_VALLEY_PALETTE,
-  TreeInstanceDefinition,
+  GOLDEN_HOUR_VALLEY_PALETTE,
+  TreeCanopyVariant,
 } from './living-valley-config';
+import { applyOrganicDisplacement, seededUnit } from './organic-noise';
 
 /**
  * Layer 3 — Midground Tree System.
- * Constructs master stylized low-poly tree templates (curved trunk + organic canopy)
- * and instances them along track clearance corridors for optimal mobile performance.
+ * Constructs master stylized low-poly tree templates (curved trunk + a small
+ * family of organic canopy silhouettes) and instances them along track
+ * clearance corridors for optimal mobile performance. All canopy variants
+ * share one material — only geometry differs — so material count and draw
+ * calls stay flat regardless of silhouette variety.
  */
 export class TreeSystem {
   private scene: Scene;
   private masterTrunkMesh: Mesh | null = null;
-  private masterCanopyMesh: Mesh | null = null;
+  private masterCanopyMeshes: Map<TreeCanopyVariant, Mesh> = new Map();
 
   private instances: InstancedMesh[] = [];
 
@@ -32,16 +36,16 @@ export class TreeSystem {
   constructor(scene: Scene) {
     this.scene = scene;
 
-    // 1. Muted Dark Slate Wood Material
+    // 1. Warm Bark Wood Material
     this.trunkMaterial = new StandardMaterial('treeTrunkMat', scene);
-    this.trunkMaterial.diffuseColor = DORMANT_VALLEY_PALETTE.treeTrunk;
+    this.trunkMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.treeTrunk;
     this.trunkMaterial.specularColor = new Color3(0.02, 0.02, 0.02);
 
-    // 2. Dormant Muted Foliage Material
+    // 2. Sunlit Foliage Material (shared across all canopy silhouette variants)
     this.canopyMaterial = new StandardMaterial('treeCanopyMat', scene);
-    this.canopyMaterial.diffuseColor = DORMANT_VALLEY_PALETTE.treeCanopy;
+    this.canopyMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.treeCanopy;
     this.canopyMaterial.specularColor = new Color3(0.04, 0.05, 0.04);
-    this.canopyMaterial.emissiveColor = DORMANT_VALLEY_PALETTE.treeCanopy.scale(0.12);
+    this.canopyMaterial.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.treeCanopy.scale(0.12);
   }
 
   public buildTreeSystem(path: FlowPath): void {
@@ -52,7 +56,7 @@ export class TreeSystem {
   }
 
   private createMasterTreeTemplates(): void {
-    // Master Trunk Template (Tapered low-poly cylinder)
+    // Master Trunk Template (Tapered low-poly cylinder) — shared by all canopy variants
     this.masterTrunkMesh = MeshBuilder.CreateCylinder(
       'masterTreeTrunk',
       {
@@ -68,41 +72,80 @@ export class TreeSystem {
     this.masterTrunkMesh.isPickable = false;
     this.masterTrunkMesh.isVisible = false; // Master mesh template stays hidden
 
-    // Master Canopy Template (Low-poly organic triple sphere cluster)
-    const sphere1 = MeshBuilder.CreateSphere('c1', { segments: 6, diameter: 6.0 }, this.scene);
-    sphere1.position.y = 8.5;
+    this.masterCanopyMeshes.set('broad', this.buildBroadCanopy());
+    this.masterCanopyMeshes.set('narrow', this.buildNarrowCanopy());
+    this.masterCanopyMeshes.set('windswept', this.buildWindsweptCanopy());
+  }
 
-    const sphere2 = MeshBuilder.CreateSphere('c2', { segments: 6, diameter: 4.8 }, this.scene);
-    sphere2.position.set(1.2, 7.5, 0.8);
+  /** Wide, rounded hero canopy — mature tree silhouette. */
+  private buildBroadCanopy(): Mesh {
+    const s1 = MeshBuilder.CreateSphere('canopy_broad_1', { segments: 6, diameter: 6.0 }, this.scene);
+    s1.position.y = 8.5;
 
-    const sphere3 = MeshBuilder.CreateSphere('c3', { segments: 6, diameter: 4.5 }, this.scene);
-    sphere3.position.set(-1.0, 9.2, -0.6);
+    const s2 = MeshBuilder.CreateSphere('canopy_broad_2', { segments: 6, diameter: 4.8 }, this.scene);
+    s2.position.set(1.2, 7.5, 0.8);
 
-    this.masterCanopyMesh = Mesh.MergeMeshes(
-      [sphere1, sphere2, sphere3],
-      true,
-      true,
-      undefined,
-      false,
-      true
-    );
+    const s3 = MeshBuilder.CreateSphere('canopy_broad_3', { segments: 6, diameter: 4.5 }, this.scene);
+    s3.position.set(-1.0, 9.2, -0.6);
 
-    if (this.masterCanopyMesh) {
-      this.masterCanopyMesh.name = 'masterTreeCanopy';
-      this.masterCanopyMesh.material = this.canopyMaterial;
-      this.masterCanopyMesh.isPickable = false;
-      this.masterCanopyMesh.isVisible = false;
-    }
+    const mesh = Mesh.MergeMeshes([s1, s2, s3], true, true, undefined, false, true)!;
+    mesh.name = 'masterTreeCanopy_broad';
+    applyOrganicDisplacement(mesh, { amplitude: 0.55, frequency: 0.22, seed: 4.2 });
+    return this.finalizeCanopyTemplate(mesh);
+  }
+
+  /** Taller, narrower, upward-reaching canopy — companion/background silhouette. */
+  private buildNarrowCanopy(): Mesh {
+    const s1 = MeshBuilder.CreateSphere('canopy_narrow_1', { segments: 6, diameterX: 3.8, diameterY: 4.6, diameterZ: 3.8 }, this.scene);
+    s1.position.y = 8.0;
+
+    const s2 = MeshBuilder.CreateSphere('canopy_narrow_2', { segments: 6, diameterX: 3.2, diameterY: 3.8, diameterZ: 3.2 }, this.scene);
+    s2.position.set(0.5, 10.4, 0.3);
+
+    const s3 = MeshBuilder.CreateSphere('canopy_narrow_3', { segments: 5, diameterX: 2.4, diameterY: 3.0, diameterZ: 2.4 }, this.scene);
+    s3.position.set(-0.3, 12.4, -0.2);
+
+    const mesh = Mesh.MergeMeshes([s1, s2, s3], true, true, undefined, false, true)!;
+    mesh.name = 'masterTreeCanopy_narrow';
+    applyOrganicDisplacement(mesh, { amplitude: 0.4, frequency: 0.26, seed: 9.7 });
+    return this.finalizeCanopyTemplate(mesh);
+  }
+
+  /** Asymmetric, lopsided canopy read as shaped by prevailing wind — breaks silhouette symmetry. */
+  private buildWindsweptCanopy(): Mesh {
+    const s1 = MeshBuilder.CreateSphere('canopy_windswept_1', { segments: 6, diameter: 5.2 }, this.scene);
+    s1.position.set(0, 8.2, 0);
+
+    const s2 = MeshBuilder.CreateSphere('canopy_windswept_2', { segments: 6, diameter: 4.0 }, this.scene);
+    s2.position.set(2.4, 7.6, 0.6);
+
+    const s3 = MeshBuilder.CreateSphere('canopy_windswept_3', { segments: 5, diameter: 3.2 }, this.scene);
+    s3.position.set(3.6, 8.8, -0.4);
+
+    const mesh = Mesh.MergeMeshes([s1, s2, s3], true, true, undefined, false, true)!;
+    mesh.name = 'masterTreeCanopy_windswept';
+    applyOrganicDisplacement(mesh, { amplitude: 0.5, frequency: 0.2, seed: 16.3 });
+    return this.finalizeCanopyTemplate(mesh);
+  }
+
+  private finalizeCanopyTemplate(mesh: Mesh): Mesh {
+    mesh.material = this.canopyMaterial;
+    mesh.isPickable = false;
+    mesh.isVisible = false;
+    return mesh;
   }
 
   private instantiateTrees(path: FlowPath): void {
-    if (!this.masterTrunkMesh || !this.masterCanopyMesh) return;
+    if (!this.masterTrunkMesh) return;
 
     const minClearance =
       LIVING_VALLEY_CONFIG.trackClearance.baseRadius +
       LIVING_VALLEY_CONFIG.trackClearance.cameraSafetyMargin;
 
     LIVING_VALLEY_CONFIG.trees.forEach((def) => {
+      const canopyTemplate = this.masterCanopyMeshes.get(def.canopyVariant);
+      if (!canopyTemplate) return;
+
       const trackFrame = path.getTrackFrame(def.progressAnchor);
 
       // Enforce strict clearance distance outside the 18m+ protected gameplay corridor
@@ -122,18 +165,23 @@ export class TreeSystem {
           trackFrame.up.z * def.verticalOffset
       );
 
+      // Small deterministic lean so trees don't all stand at a perfect vertical —
+      // trunk and canopy share the same lean value so they tilt together.
+      const leanX = (seededUnit(def.id, 1) - 0.5) * 0.14;
+      const leanZ = (seededUnit(def.id, 2) - 0.5) * 0.14;
+
       // Instance Trunk
       const trunkInst = this.masterTrunkMesh!.createInstance(`trunk_${def.id}`);
       trunkInst.position = worldPos;
       trunkInst.scaling.set(def.scale, def.scale, def.scale);
-      trunkInst.rotation.y = def.rotationY;
+      trunkInst.rotation.set(leanX, def.rotationY, leanZ);
       trunkInst.isPickable = false;
 
       // Instance Canopy
-      const canopyInst = this.masterCanopyMesh!.createInstance(`canopy_${def.id}`);
+      const canopyInst = canopyTemplate.createInstance(`canopy_${def.id}`);
       canopyInst.position = worldPos;
       canopyInst.scaling.set(def.scale, def.scale, def.scale);
-      canopyInst.rotation.y = def.rotationY;
+      canopyInst.rotation.set(leanX, def.rotationY, leanZ);
       canopyInst.isPickable = false;
 
       this.instances.push(trunkInst, canopyInst);
@@ -148,10 +196,8 @@ export class TreeSystem {
       this.masterTrunkMesh.dispose();
       this.masterTrunkMesh = null;
     }
-    if (this.masterCanopyMesh) {
-      this.masterCanopyMesh.dispose();
-      this.masterCanopyMesh = null;
-    }
+    this.masterCanopyMeshes.forEach((mesh) => mesh.dispose());
+    this.masterCanopyMeshes.clear();
 
     this.trunkMaterial.dispose();
     this.canopyMaterial.dispose();

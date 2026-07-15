@@ -9,13 +9,14 @@ import {
 import { FlowPath } from '../../game/movement/flow-path';
 import {
   LIVING_VALLEY_CONFIG,
-  DORMANT_VALLEY_PALETTE,
+  GOLDEN_HOUR_VALLEY_PALETTE,
   LandformDefinition,
   MountainLayerConfig,
 } from './living-valley-config';
 import { TreeSystem } from './tree-system';
 import { VegetationScatter } from './vegetation-scatter';
 import { AmbientParticleSystem } from './ambient-particle-system';
+import { applyOrganicDisplacement, seedFromId } from './organic-noise';
 
 /**
  * World 01 — The Living Valley: Macro World Composition Engine.
@@ -34,7 +35,12 @@ export class LivingValleyComposition {
   public readonly ambientParticles: AmbientParticleSystem;
 
   private terrainMaterial: StandardMaterial;
-  private landformMaterial: StandardMaterial;
+  // Landform materials are split by role so the 11 bluffs/cliffs/ridges don't
+  // read as one repeated flat-colored shape: cliffs stay darker/sharper,
+  // bluffs read warmer/sunlit, rolling ridges sit at a mid-tone between them.
+  private landformMaterialCliff: StandardMaterial;
+  private landformMaterialBluff: StandardMaterial;
+  private landformMaterialRidge: StandardMaterial;
   private mountainMaterials: Map<string, StandardMaterial> = new Map();
 
   constructor(scene: Scene) {
@@ -45,17 +51,27 @@ export class LivingValleyComposition {
     this.vegetationScatter = new VegetationScatter(scene);
     this.ambientParticles = new AmbientParticleSystem(scene);
 
-    // 1. Terrain Base Material (Muted Sage)
+    // 1. Terrain Base Material (Sunlit Olive-Sage)
     this.terrainMaterial = new StandardMaterial('valleyTerrainMat', scene);
-    this.terrainMaterial.diffuseColor = DORMANT_VALLEY_PALETTE.sage;
+    this.terrainMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.sage;
     this.terrainMaterial.specularColor = new Color3(0.02, 0.03, 0.02);
-    this.terrainMaterial.emissiveColor = DORMANT_VALLEY_PALETTE.sage.scale(0.15);
+    this.terrainMaterial.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.sage.scale(0.15);
 
-    // 2. Midground Landform Material (Deep Slate Shadow)
-    this.landformMaterial = new StandardMaterial('landformMat', scene);
-    this.landformMaterial.diffuseColor = DORMANT_VALLEY_PALETTE.slateShadow;
-    this.landformMaterial.specularColor = new Color3(0.04, 0.05, 0.06);
-    this.landformMaterial.emissiveColor = DORMANT_VALLEY_PALETTE.slateShadow.scale(0.2);
+    // 2. Midground Landform Materials (role-based, still just 3 shared materials total)
+    this.landformMaterialCliff = new StandardMaterial('landformCliffMat', scene);
+    this.landformMaterialCliff.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.slateShadow;
+    this.landformMaterialCliff.specularColor = new Color3(0.04, 0.05, 0.06);
+    this.landformMaterialCliff.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.slateShadow.scale(0.15);
+
+    this.landformMaterialBluff = new StandardMaterial('landformBluffMat', scene);
+    this.landformMaterialBluff.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.landformBluff;
+    this.landformMaterialBluff.specularColor = new Color3(0.03, 0.04, 0.04);
+    this.landformMaterialBluff.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.landformBluff.scale(0.22);
+
+    this.landformMaterialRidge = new StandardMaterial('landformRidgeMat', scene);
+    this.landformMaterialRidge.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.landformRidge;
+    this.landformMaterialRidge.specularColor = new Color3(0.03, 0.04, 0.05);
+    this.landformMaterialRidge.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.landformRidge.scale(0.18);
   }
 
   /**
@@ -157,6 +173,13 @@ export class LivingValleyComposition {
       );
 
       let mesh: Mesh;
+      let material: StandardMaterial;
+      // Noise amplitude/frequency ratios tuned per variant so cliffs keep sharp,
+      // readable planes while rounded bluffs/ridges get a fuller sculpted look —
+      // preserving the intended silhouette contrast between "hard rock" and
+      // "soft earth" shape language instead of applying one uniform treatment.
+      let noiseAmplitudeRatio: number;
+      let noiseFrequency: number;
 
       // Create low-poly stylized organic forms based on variant
       if (def.variant === 'smooth-bluff') {
@@ -165,12 +188,18 @@ export class LivingValleyComposition {
           { segments: 8, diameterX: def.scale[0], diameterY: def.scale[1], diameterZ: def.scale[2] },
           this.scene
         );
+        material = this.landformMaterialBluff;
+        noiseAmplitudeRatio = 0.13;
+        noiseFrequency = 0.05;
       } else if (def.variant === 'cliff-wall') {
         mesh = MeshBuilder.CreateBox(
           def.id,
           { width: def.scale[0], height: def.scale[1], depth: def.scale[2] },
           this.scene
         );
+        material = this.landformMaterialCliff;
+        noiseAmplitudeRatio = 0.035; // keep cliff faces sharp and planar
+        noiseFrequency = 0.03;
       } else {
         // rolling-shoulder & ridge-mound
         mesh = MeshBuilder.CreateCylinder(
@@ -183,12 +212,25 @@ export class LivingValleyComposition {
           },
           this.scene
         );
+        material = this.landformMaterialRidge;
+        noiseAmplitudeRatio = 0.10;
+        noiseFrequency = 0.045;
       }
+
+      // Break up the primitive silhouette into a softer, sculpted landform.
+      // Amplitude scales with the mesh's smallest dimension so small bluffs
+      // don't get spiky and large ridges still read as gently eroded.
+      const minDimension = Math.min(def.scale[0], def.scale[1], def.scale[2]);
+      applyOrganicDisplacement(mesh, {
+        amplitude: minDimension * noiseAmplitudeRatio,
+        frequency: noiseFrequency,
+        seed: seedFromId(def.id),
+      });
 
       mesh.position = worldPos;
       mesh.rotation.y = def.rotationY;
       mesh.rotation.z = Math.sign(effectiveLateralOffset) * -0.15; // Subtle tilt into valley
-      mesh.material = this.landformMaterial;
+      mesh.material = material;
 
       this.landformMeshes.push(mesh);
     });
@@ -262,7 +304,9 @@ export class LivingValleyComposition {
     this.mountainMeshes = [];
 
     this.terrainMaterial.dispose();
-    this.landformMaterial.dispose();
+    this.landformMaterialCliff.dispose();
+    this.landformMaterialBluff.dispose();
+    this.landformMaterialRidge.dispose();
     this.mountainMaterials.forEach((mat) => mat.dispose());
     this.mountainMaterials.clear();
   }
