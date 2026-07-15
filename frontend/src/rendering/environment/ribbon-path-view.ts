@@ -126,10 +126,18 @@ export class RibbonPathView {
 
   public setGlowIntensity(harmony: number): void {
     const val = Math.max(0, Math.min(1, harmony));
-    const r = 0.2 + val * 0.1;
-    const g = 0.85 + val * 0.15;
-    const b = 1.0;
-    this.borderMaterial.emissiveColor = new Color3(r, g, b);
+
+    // Dynamic border rail awakening (Dormant muted indigo -> Vibrant kinetic cyan)
+    const bR = 0.10 + val * 0.25;
+    const bG = 0.45 + val * 0.50;
+    const bB = 0.65 + val * 0.35;
+    this.borderMaterial.emissiveColor = new Color3(bR, bG, bB);
+
+    // Dynamic track surface awakening (Dormant dark slate -> Luminous deep energy ribbon)
+    const sR = 0.02 + val * 0.06;
+    const sG = 0.04 + val * 0.18;
+    const sB = 0.08 + val * 0.30;
+    this.roadMaterial.emissiveColor = new Color3(sR, sG, sB);
   }
 
   public dispose(): void {

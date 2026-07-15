@@ -1,6 +1,5 @@
 import { GameBootstrap } from './core/bootstrap/game-bootstrap';
 import { MovementController } from './game/movement/movement-controller';
-import { MovementModelId } from './game/movement/movement-types';
 import { MathFlowPath } from './game/movement/flow-path';
 import { InputRouter } from './game/input/input-router';
 import { generateCourseTargets } from './game/prototype/prototype-target';
@@ -8,9 +7,14 @@ import { PrototypeInteractionSystem } from './game/prototype/prototype-interacti
 import { PrototypeSession } from './game/prototype/prototype-session';
 import { PrototypeMetrics } from './game/prototype/prototype-metrics';
 import { DebugOverlay } from './ui/debug-overlay';
+import { UIRouter } from './ui/navigation/ui-router';
+import { RouteId } from './ui/navigation/route-id';
+import { ApplicationState } from './core/state-machine/game-state';
+import { GameMode, SessionStatus } from '@flowstate/shared';
+import { ResonanceFeedbackController } from './rendering/vfx/resonance-feedback';
 
 async function main() {
-  console.log('Starting FLOWSTATE Core Movement Lab v0.1...');
+  console.log('Starting FLOWSTATE Living Resonance Title & Gameplay Journey...');
 
   const canvas = typeof document !== 'undefined' ? (document.getElementById('renderCanvas') as HTMLCanvasElement) : undefined;
   const bootstrapper = new GameBootstrap();
@@ -26,10 +30,9 @@ async function main() {
   const path = new MathFlowPath(600, 10, 2, 4, 3);
   const movementController = new MovementController('guided-flow');
 
-  // Build elevated 3D ribbon path geometry sampling directly from authoritative FlowPath math
+  // Build elevated 3D ribbon path geometry & Living Valley macro environment
   activeScene.environmentView.ribbonPath.buildPathMesh(path);
-
-  // Generate background environment floating islands & landmark crystals
+  activeScene.environmentView.initLivingValley(path);
   activeScene.environmentView.worldProps.generateEnvironmentProps(path);
 
   // 2. Prototype System Initialization
@@ -37,79 +40,160 @@ async function main() {
   const interactionSystem = new PrototypeInteractionSystem();
   interactionSystem.setTargets(targets);
 
-  const session = new PrototypeSession(60); // 60-second prototype session
+  const session = new PrototypeSession(60);
   const metrics = new PrototypeMetrics();
   metrics.setModel(movementController.getActiveModelId());
 
-  // 3. Render 3D Targets in Presentation Layer with authoritative TrackFrame rotation
-  activeScene.renderTargets(targets, path);
+  let sessionEndedEmitted = false;
 
-  // 4. Input Integration
+  // 3. Render 3D Targets & Initialize Resonance Feedback Layer
+  activeScene.renderTargets(targets, path);
+  const resonanceFeedback = new ResonanceFeedbackController(activeScene);
+
+  // 4. Input Integration & UI Routing
   const inputRouter = new InputRouter();
   inputRouter.attachCanvas(canvas);
 
-  // 5. Live Telemetry Overlay
+  const uiRouter = new UIRouter(context.eventBus);
   const debugOverlay = new DebugOverlay();
 
-  // Helper for resetting test session and player state on switch/restart
-  const resetSessionAndState = () => {
+  // Helper for preparing/resetting session & presentation state without starting session timer
+  const prepareSessionAndState = () => {
+    sessionEndedEmitted = false;
     movementController.reset();
     interactionSystem.reset();
     metrics.reset();
     metrics.setModel(movementController.getActiveModelId());
-    session.start();
 
-    // Reset presentation visual state cleanly
+    // Reset presentation visual state
     activeScene.updateTargetVisualStates(interactionSystem.getTargetStates());
     const initialState = movementController.getPlayerState();
     activeScene.playerView.setPosition(initialState.position.x, initialState.position.y, initialState.position.z);
     activeScene.playerView.resetVisualState();
     activeScene.camera.resetPosition(initialState.position);
-
-    console.log(`[Core Movement Lab] Reset & Restarted Session with Model: ${movementController.getActiveModelId()}`);
+    resonanceFeedback.reset();
   };
 
-  // Keyboard shortcut listeners for switching movement models
+  // Explicit action callback triggered to start active gameplay run
+  const startPlaySession = () => {
+    console.log('[FLOWSTATE] Initializing active gameplay session');
+
+    context.eventBus.emit('session:started', {
+      sessionId: `session_${Date.now()}`,
+      mode: GameMode.ZEN,
+      timestamp: Date.now(),
+    });
+
+    context.stateMachine.transitionTo(ApplicationState.PLAYING);
+    activeScene.camera.setMode('PLAYING');
+
+    uiRouter.navigateTo(RouteId.HUD);
+    prepareSessionAndState();
+    session.start(); // Timer ONLY ticks after active session starts
+  };
+
+  // Event Bus Listener for Session Ended Milestone
+  context.eventBus.on('session:ended', (payload) => {
+    console.log('[FLOWSTATE] session:ended event payload received:', payload);
+
+    context.stateMachine.transitionTo(ApplicationState.RESULTS);
+    activeScene.camera.setMode('CINEMATIC_IDLE');
+
+    const summary = metrics.getSummary();
+    const targetsCleared = summary.targetsPassed;
+    const totalCourseTargets = 30;
+    const harmonyPct = Math.round(session.getCourseProgress() * 100);
+    const calculatedScore = payload.finalScore > 0 ? payload.finalScore : Math.round(targetsCleared * 250 + harmonyPct * 10);
+
+    const resultsData = {
+      targetsPassed: targetsCleared,
+      totalTargets: totalCourseTargets,
+      finalScore: calculatedScore,
+      harmonyPct: harmonyPct,
+      durationSeconds: 60,
+    };
+
+    uiRouter.showResults(
+      resultsData,
+      // Retry Callback: Re-Resonate
+      () => {
+        console.log('[FLOWSTATE] Re-Resonating run from Results Screen');
+        startPlaySession();
+      },
+      // Return Callback: Return to Void
+      () => {
+        console.log('[FLOWSTATE] Returning to Void / Title Screen');
+        context.stateMachine.transitionTo(ApplicationState.TITLE);
+        activeScene.camera.setMode('CINEMATIC_IDLE');
+        uiRouter.navigateTo(RouteId.TITLE, startPlaySession);
+        prepareSessionAndState(); // Visuals reset, timer stays stopped!
+      }
+    );
+  });
+
+  // Keyboard shortcut listeners
   window.addEventListener('keydown', (e) => {
     if (e.key === '1') {
       movementController.switchModel('guided-flow');
-      resetSessionAndState();
+      startPlaySession();
     } else if (e.key === '2') {
       movementController.switchModel('free-flow');
-      resetSessionAndState();
+      startPlaySession();
     } else if (e.key === '3') {
       movementController.switchModel('branching-flow');
-      resetSessionAndState();
+      startPlaySession();
     } else if (e.key === 'r' || e.key === 'R') {
-      resetSessionAndState();
+      if (context.stateMachine.getCurrentState() === ApplicationState.PLAYING) {
+        startPlaySession();
+      }
     }
   });
 
-  // Start initial prototype session
-  session.start();
+  // Set initial application state & camera idle mode
+  context.stateMachine.transitionTo(ApplicationState.TITLE);
+  activeScene.camera.setMode('CINEMATIC_IDLE');
+
+  // Mount Title Screen as initial route
+  uiRouter.navigateTo(RouteId.TITLE, startPlaySession);
 
   let lastTime = performance.now();
 
-  // 6. Authoritative Game Loop Tick Sync
+  // 5. Authoritative Game Loop Tick Sync
   const updateLoop = () => {
     const now = performance.now();
     const deltaTimeSeconds = Math.min(0.1, (now - lastTime) / 1000.0);
     lastTime = now;
 
-    if (session.getState() === 'RUNNING') {
-      // a. Read normalized movement intent
+    const appState = context.stateMachine.getCurrentState();
+
+    if (appState === ApplicationState.TITLE || appState === ApplicationState.RESULTS) {
+      // 3D Scene remains fully visible behind Title/Results UI, executing slow cinematic camera orbit
+      const initialPState = movementController.getPlayerState();
+      activeScene.camera.updateTarget(
+        initialPState.position,
+        { x: 0, y: 0, z: 1 },
+        0,
+        0,
+        deltaTimeSeconds
+      );
+      if (appState === ApplicationState.TITLE) {
+        activeScene.environmentView.setHarmonyLevel(0.2);
+      }
+    } else if (appState === ApplicationState.PLAYING && session.getState() === 'RUNNING') {
+      // Read input intent
       const intent = inputRouter.getCurrentIntent();
 
-      // b. Tick movement simulation controller -> yields updated PlayerState
+      // Tick movement simulation controller
       const playerState = movementController.update(intent, deltaTimeSeconds);
 
-      // c. Evaluate target interactions using framework-neutral simulation data
+      // Evaluate target interactions
       const events = interactionSystem.evaluate(playerState);
       for (const event of events) {
         metrics.recordInteraction(event);
       }
+      resonanceFeedback.onInteractionEvents(events);
 
-      // d. Estimate path deviation for metrics tracking
+      // Estimate path deviation
       const closestProg = path.getClosestProgress(playerState.position);
       const pathPoint = path.getPosition(closestProg);
       const dx = playerState.position.x - pathPoint.x;
@@ -118,30 +202,42 @@ async function main() {
 
       metrics.recordFrame(playerState, intent, pathDeviation, deltaTimeSeconds);
 
-      // e. Advance prototype session progress
+      // Advance prototype session progress
       session.update(deltaTimeSeconds, closestProg);
 
-      // f. Presentation Bridge: Sync simulation PlayerState -> Babylon 3D Mesh & Camera
+      // Presentation Bridge: Sync 3D scene, visual landing squash, & camera chase
       activeScene.updateTargetVisualStates(interactionSystem.getTargetStates());
+      activeScene.update(deltaTimeSeconds, playerState, intent.horizontal);
 
-      // Sync 3D scene visual updates, landing squash animation, and chase camera look-ahead
-      activeScene.update(
-        deltaTimeSeconds,
+      // Drive visual world vitality from hybrid harmony interpolation (30% journey progress + 70% target pass accuracy)
+      const courseProgress = session.getCourseProgress();
+      const summaryMetrics = metrics.getSummary();
+      const performanceRatio = summaryMetrics.targetsPassed / 30.0;
+      resonanceFeedback.setHarmonyLevel(courseProgress, performanceRatio, deltaTimeSeconds);
+
+      // Update Player HUD via UIRouter
+      resonanceFeedback.setPlayerHud(uiRouter.getPlayerHud());
+      uiRouter.updateHud({
+        sessionProgress: courseProgress,
+        remainingTime: session.getRemainingTime(),
+        metrics: metrics.getSummary(),
         playerState,
-        intent.horizontal
-      );
+      });
 
-      // TEMPORARY PROTOTYPE BEHAVIOR: Drive harmony visual level from course completion progress
-      const temporaryHarmonyLevel = session.getCourseProgress();
-      activeScene.environmentView.setHarmonyLevel(temporaryHarmonyLevel);
-
-      if (session.getState() === 'COMPLETED') {
-        console.log('[Core Movement Lab] Session Completed!');
-        metrics.printSummaryToConsole();
+      if (session.getState() === 'COMPLETED' && !sessionEndedEmitted) {
+        sessionEndedEmitted = true;
+        console.log('[FLOWSTATE] Prototype Session Completed -> Emitting session:ended');
+        const summary = metrics.getSummary();
+        const score = Math.round(summary.targetsPassed * 250 + courseProgress * 1000);
+        context.eventBus.emit('session:ended', {
+          sessionId: `session_${Date.now()}`,
+          status: SessionStatus.COMPLETED,
+          finalScore: score,
+        });
       }
     }
 
-    // g. Update debug overlay
+    // Update telemetry overlay
     const currentPState = movementController.getPlayerState();
     debugOverlay.update({
       modelId: movementController.getActiveModelId(),
@@ -159,9 +255,9 @@ async function main() {
 
   requestAnimationFrame(updateLoop);
 
-  console.log('FLOWSTATE Core Movement Lab v0.1 is ready!');
+  console.log('FLOWSTATE Title, HUD & Results Journey is ready!');
 }
 
 main().catch((err) => {
-  console.error('Fatal error in Core Movement Lab execution:', err);
+  console.error('Fatal error in FLOWSTATE main execution:', err);
 });

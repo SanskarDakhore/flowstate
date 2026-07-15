@@ -3,6 +3,9 @@ import { WorldPresentation } from './world-presentation';
 import { GameplayLighting } from '../lighting/gameplay-lighting';
 import { RibbonPathView } from './ribbon-path-view';
 import { WorldEnvironmentProps } from './world-props';
+import { LivingValleyComposition } from './living-valley-composition';
+import { DORMANT_VALLEY_PALETTE } from './living-valley-config';
+import { FlowPath } from '../../game/movement/flow-path';
 
 export class EnvironmentView implements WorldPresentation {
   private scene: Scene;
@@ -13,47 +16,55 @@ export class EnvironmentView implements WorldPresentation {
   private lighting: GameplayLighting;
   public readonly ribbonPath: RibbonPathView;
   public readonly worldProps: WorldEnvironmentProps;
+  public readonly livingValleyComposition: LivingValleyComposition;
   private currentHarmony = 0.0;
-
-  // Atmosphere palette base colors (Deep navy -> Indigo/Purple)
-  private readonly baseFogColor = new Color3(0.02, 0.03, 0.08);
-  private readonly baseSkyColor = new Color3(0.04, 0.06, 0.16);
 
   constructor(scene: Scene, lighting: GameplayLighting) {
     this.scene = scene;
     this.lighting = lighting;
 
-    // 1. Atmosphere Fog setup
+    // 1. Atmosphere Fog setup using authoritative Dormant Valley palette
     this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogColor = this.baseFogColor.clone();
-    this.scene.fogDensity = 0.005;
+    this.scene.fogColor = DORMANT_VALLEY_PALETTE.fog.clone();
+    this.scene.fogDensity = 0.0022; // Soft atmospheric depth over 1200m expanse
 
     // 2. Atmospheric Sky Dome (Inverted sphere wrapping visual volume)
     this.skyDome = MeshBuilder.CreateSphere(
       'skyDome',
-      { diameter: 1200, segments: 16, sideOrientation: Mesh.BACKSIDE },
+      { diameter: 2800, segments: 16, sideOrientation: Mesh.BACKSIDE },
       scene
     );
     this.skyMat = new StandardMaterial('skyMat', scene);
     this.skyMat.backFaceCulling = false;
     this.skyMat.disableLighting = true;
-    this.skyMat.emissiveColor = this.baseSkyColor.clone();
+    this.skyMat.emissiveColor = DORMANT_VALLEY_PALETTE.skyEmissive.clone();
     this.skyDome.material = this.skyMat;
 
-    // 3. Ground Mesh
+    // 3. Ground Mesh (Disabled in favor of contoured continuous valley floor ribbon)
     this.groundMesh = MeshBuilder.CreateGround('ground', { width: 100, height: 100, subdivisions: 4 }, scene);
     this.groundMat = new StandardMaterial('groundMat', scene);
-    this.groundMat.diffuseColor = new Color3(0.06, 0.08, 0.12);
-    this.groundMat.specularColor = new Color3(0.02, 0.02, 0.04);
+    this.groundMat.diffuseColor = DORMANT_VALLEY_PALETTE.sage;
     this.groundMesh.material = this.groundMat;
+    this.groundMesh.isVisible = false; // Contoured Valley Floor replaces flat ground plane
 
     // 4. Elevated 3D Ribbon Path Visual Surface
     this.ribbonPath = new RibbonPathView(scene);
 
-    // 5. Environmental Props (Floating Islands & Crystals)
+    // 5. Macro World Composition Engine (The Living Valley)
+    this.livingValleyComposition = new LivingValleyComposition(scene);
+
+    // 6. Legacy Environmental Props
     this.worldProps = new WorldEnvironmentProps(scene);
 
     this.applyHarmonyVisuals(0.0);
+  }
+
+  /**
+   * Initializes the macro world composition (Valley Floor, Midground Landforms, Mountain Horizon)
+   * around the active playable FlowPath.
+   */
+  public initLivingValley(path: FlowPath): void {
+    this.livingValleyComposition.buildComposition(path);
   }
 
   public setHarmonyLevel(value: number): void {
@@ -66,32 +77,35 @@ export class EnvironmentView implements WorldPresentation {
     return this.currentHarmony;
   }
 
-  public update(deltaTimeSeconds: number): void {
+  public update(deltaTimeSeconds: number, playerPosition?: { x: number; y: number; z: number }): void {
     this.worldProps.update(deltaTimeSeconds);
+    this.livingValleyComposition.update(deltaTimeSeconds, playerPosition);
   }
 
   private applyHarmonyVisuals(val: number): void {
-    // 0.0 (Fragmented/Muted Indigo) -> 1.0 (Harmonious/Vibrant Deep Cyan-Indigo)
-    const fogR = 0.02 + val * 0.03;
-    const fogG = 0.03 + val * 0.08;
-    const fogB = 0.08 + val * 0.15;
+    // Dormant base slate/sage -> Gentle harmony color boost
+    const baseFog = DORMANT_VALLEY_PALETTE.fog;
+    const fogR = baseFog.r + val * 0.04;
+    const fogG = baseFog.g + val * 0.08;
+    const fogB = baseFog.b + val * 0.12;
 
     const fogColor = new Color3(fogR, fogG, fogB);
     this.scene.fogColor = fogColor;
     this.scene.clearColor = new Color4(fogR, fogG, fogB, 1.0);
 
-    const skyR = 0.04 + val * 0.05;
-    const skyG = 0.06 + val * 0.12;
-    const skyB = 0.16 + val * 0.20;
+    const baseSky = DORMANT_VALLEY_PALETTE.skyEmissive;
+    const skyR = baseSky.r + val * 0.05;
+    const skyG = baseSky.g + val * 0.10;
+    const skyB = baseSky.b + val * 0.15;
     this.skyMat.emissiveColor = new Color3(skyR, skyG, skyB);
 
-    this.groundMat.diffuseColor = new Color3(0.06 + val * 0.1, 0.08 + val * 0.2, 0.12 + val * 0.3);
     this.ribbonPath.setGlowIntensity(val);
     this.worldProps.setHarmonyVisuals(val);
     this.lighting.setHarmonyIntensity(val);
   }
 
   public dispose(): void {
+    this.livingValleyComposition.dispose();
     this.worldProps.dispose();
     this.ribbonPath.dispose();
     this.skyDome.dispose();

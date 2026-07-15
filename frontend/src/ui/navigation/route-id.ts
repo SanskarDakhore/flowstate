@@ -1,5 +1,6 @@
 export enum RouteId {
   NONE = 'NONE',
+  TITLE = 'TITLE',
   MAIN_MENU = 'MAIN_MENU',
   MODE_SELECT = 'MODE_SELECT',
   HUD = 'HUD',

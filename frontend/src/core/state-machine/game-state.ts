@@ -1,6 +1,7 @@
 export enum ApplicationState {
   BOOTSTRAP = 'BOOTSTRAP',
   SPLASH = 'SPLASH',
+  TITLE = 'TITLE',
   MAIN_MENU = 'MAIN_MENU',
   MODE_SELECTION = 'MODE_SELECTION',
   PLAYING = 'PLAYING',

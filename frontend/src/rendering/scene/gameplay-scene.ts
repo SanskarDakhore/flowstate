@@ -35,11 +35,7 @@ export class GameplayScene {
 
   private targetMeshes: Map<string, Mesh> = new Map();
   private targetDefinitions: PrototypeTargetDefinition[] = [];
-  private ringMaterial!: StandardMaterial;
-  private gateMaterial!: StandardMaterial;
-  private blockerMaterial!: StandardMaterial;
-  private inactiveMaterial!: StandardMaterial;
-
+  private activeTargetPulses: Array<{ mesh: Mesh; material: StandardMaterial; timer: number }> = [];
   // F2 Track Debug Mode
   private debugModeActive: boolean = false;
   private debugLineMeshes: LinesMesh[] = [];
@@ -154,19 +150,60 @@ export class GameplayScene {
     }
   }
 
+  private activeRingMaterial!: StandardMaterial;
+  private upcomingRingMaterial!: StandardMaterial;
+  private distantRingMaterial!: StandardMaterial;
+  private activeGateMaterial!: StandardMaterial;
+  private upcomingGateMaterial!: StandardMaterial;
+  private distantGateMaterial!: StandardMaterial;
+  private blockerMaterial!: StandardMaterial;
+  private resolvedMaterial!: StandardMaterial;
+  private missedMaterial!: StandardMaterial;
+  private inactiveMaterial!: StandardMaterial;
+
   private initTargetMaterials(): void {
-    this.ringMaterial = new StandardMaterial('ringMat', this.babylonScene);
-    this.ringMaterial.emissiveColor = new Color3(0.2, 0.85, 1.0); // Vibrant Cyan glow
+    // 1. Ring Materials (Active / Upcoming / Distant)
+    this.activeRingMaterial = new StandardMaterial('activeRingMat', this.babylonScene);
+    this.activeRingMaterial.emissiveColor = new Color3(0.4, 0.95, 1.0); // Kinetic Cyan
+    this.activeRingMaterial.alpha = 1.0;
 
-    this.gateMaterial = new StandardMaterial('gateMat', this.babylonScene);
-    this.gateMaterial.emissiveColor = new Color3(0.3, 1.0, 0.4); // Emerald green glow
+    this.upcomingRingMaterial = new StandardMaterial('upcomingRingMat', this.babylonScene);
+    this.upcomingRingMaterial.emissiveColor = new Color3(0.2, 0.75, 0.9);
+    this.upcomingRingMaterial.alpha = 0.65;
 
+    this.distantRingMaterial = new StandardMaterial('distantRingMat', this.babylonScene);
+    this.distantRingMaterial.emissiveColor = new Color3(0.1, 0.4, 0.6);
+    this.distantRingMaterial.alpha = 0.35;
+
+    // 2. Arch Gate Materials (Active / Upcoming / Distant)
+    this.activeGateMaterial = new StandardMaterial('activeGateMat', this.babylonScene);
+    this.activeGateMaterial.emissiveColor = new Color3(0.4, 1.0, 0.5); // Emerald Green
+    this.activeGateMaterial.alpha = 1.0;
+
+    this.upcomingGateMaterial = new StandardMaterial('upcomingGateMat', this.babylonScene);
+    this.upcomingGateMaterial.emissiveColor = new Color3(0.2, 0.8, 0.35);
+    this.upcomingGateMaterial.alpha = 0.65;
+
+    this.distantGateMaterial = new StandardMaterial('distantGateMat', this.babylonScene);
+    this.distantGateMaterial.emissiveColor = new Color3(0.1, 0.45, 0.2);
+    this.distantGateMaterial.alpha = 0.35;
+
+    // 3. Blocker Material
     this.blockerMaterial = new StandardMaterial('blockerMat', this.babylonScene);
-    this.blockerMaterial.emissiveColor = new Color3(1.0, 0.25, 0.25); // Red glow
+    this.blockerMaterial.emissiveColor = new Color3(1.0, 0.25, 0.25);
+
+    // 4. Resolved (Passed) & Missed Target State Materials
+    this.resolvedMaterial = new StandardMaterial('resolvedMat', this.babylonScene);
+    this.resolvedMaterial.emissiveColor = new Color3(0.15, 0.65, 0.85); // Calm Cyan
+    this.resolvedMaterial.alpha = 0.40;
+
+    this.missedMaterial = new StandardMaterial('missedMat', this.babylonScene);
+    this.missedMaterial.emissiveColor = new Color3(0.12, 0.12, 0.16); // Desaturated slate
+    this.missedMaterial.alpha = 0.15;
 
     this.inactiveMaterial = new StandardMaterial('inactiveMat', this.babylonScene);
-    this.inactiveMaterial.emissiveColor = new Color3(0.15, 0.15, 0.2); // Dim grey
-    this.inactiveMaterial.alpha = 0.25;
+    this.inactiveMaterial.emissiveColor = new Color3(0.1, 0.1, 0.14);
+    this.inactiveMaterial.alpha = 0.15;
   }
 
   public renderTargets(definitions: PrototypeTargetDefinition[], path?: FlowPath): void {
@@ -175,6 +212,8 @@ export class GameplayScene {
     }
     this.targetDefinitions = definitions;
 
+    this.activeTargetPulses.forEach((p) => p.mesh.dispose());
+    this.activeTargetPulses = [];
     this.targetMeshes.forEach((mesh) => mesh.dispose());
     this.targetMeshes.clear();
 
@@ -192,19 +231,21 @@ export class GameplayScene {
       let mesh: Mesh;
 
       if (def.type === 'RING') {
+        // Multi-segment alignment torus for RING target
         mesh = MeshBuilder.CreateTorus(
           def.id,
-          { diameter: def.radius * 2, thickness: 0.25, tessellation: 24 },
+          { diameter: def.radius * 2, thickness: 0.22, tessellation: 28 },
           this.babylonScene
         );
-        mesh.material = this.ringMaterial;
+        mesh.material = this.upcomingRingMaterial;
       } else if (def.type === 'GATE') {
-        mesh = MeshBuilder.CreateBox(
+        // Grounded Arch Gate Torus
+        mesh = MeshBuilder.CreateTorus(
           def.id,
-          { width: def.radius * 2, height: def.radius * 2.2, depth: 0.3 },
+          { diameter: def.radius * 2.2, thickness: 0.32, tessellation: 28 },
           this.babylonScene
         );
-        mesh.material = this.gateMaterial;
+        mesh.material = this.upcomingGateMaterial;
       } else {
         mesh = MeshBuilder.CreateSphere(
           def.id,
@@ -219,7 +260,17 @@ export class GameplayScene {
       const right = new Vector3(resolved.right.x, resolved.right.y, resolved.right.z);
       const up = new Vector3(resolved.up.x, resolved.up.y, resolved.up.z);
       const forward = new Vector3(resolved.forward.x, resolved.forward.y, resolved.forward.z);
-      mesh.rotationQuaternion = Quaternion.RotationQuaternionFromAxis(right, up, forward);
+
+      // Base TrackFrame rotation matrix
+      const frameRot = Quaternion.RotationQuaternionFromAxis(right, up, forward);
+
+      if (def.type === 'RING' || def.type === 'GATE') {
+        // Pitch 90 degrees around local X axis so ring/gate torus opening stands upright facing FORWARD along track
+        const pitch90 = Quaternion.RotationAxis(new Vector3(1, 0, 0), Math.PI / 2);
+        mesh.rotationQuaternion = frameRot.multiply(pitch90);
+      } else {
+        mesh.rotationQuaternion = frameRot;
+      }
 
       this.targetMeshes.set(def.id, mesh);
     }
@@ -230,12 +281,86 @@ export class GameplayScene {
   }
 
   public updateTargetVisualStates(states: Map<string, PrototypeTargetState>): void {
-    states.forEach((state, id) => {
-      const mesh = this.targetMeshes.get(id);
-      if (mesh && (state.passed || state.hit || state.missed)) {
+    // 1. Identify active (first unpassed), upcoming (next 2), and distant target indices
+    let activeFound = false;
+    let upcomingCount = 0;
+
+    for (const def of this.targetDefinitions) {
+      const state = states.get(def.id);
+      const mesh = this.targetMeshes.get(def.id);
+      if (!mesh) continue;
+
+      if (state?.passed) {
+        mesh.material = this.resolvedMaterial;
+      } else if (state?.missed) {
+        mesh.material = this.missedMaterial;
+      } else if (state?.hit) {
         mesh.material = this.inactiveMaterial;
+      } else if (!activeFound) {
+        // First unpassed target = Active Target
+        activeFound = true;
+        mesh.material = def.type === 'GATE' ? this.activeGateMaterial : this.activeRingMaterial;
+      } else if (upcomingCount < 2) {
+        // Next 2 unpassed targets = Upcoming Targets
+        upcomingCount++;
+        mesh.material = def.type === 'GATE' ? this.upcomingGateMaterial : this.upcomingRingMaterial;
+      } else {
+        // Distant Targets
+        mesh.material = def.type === 'GATE' ? this.distantGateMaterial : this.distantRingMaterial;
       }
-    });
+    }
+  }
+
+  public triggerTargetPassResonance(targetId: string): void {
+    const targetMesh = this.targetMeshes.get(targetId);
+    if (!targetMesh) return;
+
+    try {
+      // Create expanding emissive resonance ring at target position
+      const pulseMesh = MeshBuilder.CreateTorus(
+        `pulse_${targetId}_${Date.now()}`,
+        { diameter: 2.2, thickness: 0.15, tessellation: 24 },
+        this.babylonScene
+      );
+      pulseMesh.position = targetMesh.position.clone();
+      if (targetMesh.rotationQuaternion) {
+        pulseMesh.rotationQuaternion = targetMesh.rotationQuaternion.clone();
+      }
+
+      const pulseMat = new StandardMaterial(`pulseMat_${targetId}`, this.babylonScene);
+      pulseMat.emissiveColor = new Color3(0.35, 0.9, 1.0); // Kinetic Cyan pulse
+      pulseMat.alpha = 0.95;
+      pulseMat.backFaceCulling = false;
+      pulseMesh.material = pulseMat;
+
+      this.activeTargetPulses.push({ mesh: pulseMesh, material: pulseMat, timer: 0.35 });
+    } catch (e) {
+      console.warn('[GameplayScene] Target pass resonance pulse fallback:', e);
+    }
+  }
+
+  public triggerTargetMissResonance(targetId: string): void {
+    const targetMesh = this.targetMeshes.get(targetId);
+    if (targetMesh) {
+      targetMesh.material = this.inactiveMaterial;
+    }
+  }
+
+  private updateActiveTargetPulses(deltaTimeSeconds: number): void {
+    for (let i = this.activeTargetPulses.length - 1; i >= 0; i--) {
+      const p = this.activeTargetPulses[i];
+      p.timer -= deltaTimeSeconds;
+      const progress = 1.0 - Math.max(0, p.timer / 0.35);
+
+      const scale = 1.0 + progress * 1.8;
+      p.mesh.scaling.set(scale, scale, scale);
+      p.material.alpha = 0.95 * (1.0 - progress);
+
+      if (p.timer <= 0) {
+        p.mesh.dispose();
+        this.activeTargetPulses.splice(i, 1);
+      }
+    }
   }
 
   public update(
@@ -243,8 +368,9 @@ export class GameplayScene {
     playerState?: PlayerState,
     lateralIntent: number = 0
   ): void {
-    // 1. Update environment props (rotating landmark crystals)
-    this.environmentView.update(deltaTimeSeconds);
+    // 1. Update target resonance pulses & environment props
+    this.updateActiveTargetPulses(deltaTimeSeconds);
+    this.environmentView.update(deltaTimeSeconds, playerState?.position);
 
     if (playerState) {
       // 2. Sync presentation player position & visual squash/stretch/jump VFX
@@ -282,6 +408,8 @@ export class GameplayScene {
 
   public dispose(): void {
     this.clearDebugVisuals();
+    this.activeTargetPulses.forEach((p) => p.mesh.dispose());
+    this.activeTargetPulses = [];
     this.targetMeshes.forEach((mesh) => mesh.dispose());
     this.targetMeshes.clear();
     this.renderingPipeline?.dispose();

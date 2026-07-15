@@ -34,7 +34,7 @@ export class WorldEnvironmentProps {
   /**
    * Generates low-poly floating islands and landmark crystals positioned along the FlowPath volume.
    */
-  public generateEnvironmentProps(path: FlowPath, islandCount: number = 24): void {
+  public generateEnvironmentProps(path: FlowPath, islandCount: number = 0): void {
     this.dispose();
 
     const totalLength = path.getTotalLength();
