@@ -16,7 +16,7 @@ import {
 import { TreeSystem } from './tree-system';
 import { VegetationScatter } from './vegetation-scatter';
 import { AmbientParticleSystem } from './ambient-particle-system';
-import { applyOrganicDisplacement, seedFromId } from './organic-noise';
+import { applyOrganicDisplacement, seedFromId, sampleNoise3D } from './organic-noise';
 
 /**
  * World 01 — The Living Valley: Macro World Composition Engine.
@@ -51,11 +51,15 @@ export class LivingValleyComposition {
     this.vegetationScatter = new VegetationScatter(scene);
     this.ambientParticles = new AmbientParticleSystem(scene);
 
-    // 1. Terrain Base Material (Sunlit Olive-Sage)
+    // 1. Terrain Base Material — white diffuse so the per-vertex color gradient
+    // (sage floor -> bluff slope -> fog rim, computed in createValleyFloor) reads
+    // at full range under normal directional/hemispheric lighting. Unlike the sky
+    // dome, lighting stays enabled here since the terrain must read as a grounded,
+    // lit surface rather than a self-illuminated backdrop.
     this.terrainMaterial = new StandardMaterial('valleyTerrainMat', scene);
-    this.terrainMaterial.diffuseColor = GOLDEN_HOUR_VALLEY_PALETTE.sage;
+    this.terrainMaterial.diffuseColor = new Color3(1, 1, 1);
     this.terrainMaterial.specularColor = new Color3(0.02, 0.03, 0.02);
-    this.terrainMaterial.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.sage.scale(0.15);
+    this.terrainMaterial.emissiveColor = new Color3(0.03, 0.03, 0.02);
 
     // 2. Midground Landform Materials (role-based, still just 3 shared materials total)
     this.landformMaterialCliff = new StandardMaterial('landformCliffMat', scene);
@@ -101,46 +105,93 @@ export class LivingValleyComposition {
 
   /**
    * Generates a smooth continuous terrain ribbon beneath the track route.
+   *
+   * The lateral contour rises into asymmetric valley walls near the outer
+   * edges of the ribbon (rather than sinking away, which used to expose the
+   * mesh's true boundary against open sky — read as a "floating platform").
+   * The walls stay gentle near the track and climb steeply only near the rim,
+   * where a vertex-color gradient toward the fog color helps the boundary
+   * dissolve into atmospheric haze instead of silhouetting.
    */
   private createValleyFloor(path: FlowPath): void {
     const { width, subdivisionsX, subdivisionsZ, baseDepth } = LIVING_VALLEY_CONFIG.terrain;
-    const totalLength = path.getTotalLength();
 
     const paths: Vector3[][] = [];
+    const colors: number[] = [];
     const halfWidth = width * 0.5;
+
+    const floorColor = GOLDEN_HOUR_VALLEY_PALETTE.sage;
+    const slopeColor = GOLDEN_HOUR_VALLEY_PALETTE.landformBluff;
+    const rimColor = GOLDEN_HOUR_VALLEY_PALETTE.fog;
 
     for (let r = 0; r <= subdivisionsX; r++) {
       const rowPath: Vector3[] = [];
       const u = r / subdivisionsX; // 0..1 across lateral width
       const offsetFactor = (u - 0.5) * 2; // -1..+1
+      const t = Math.min(1, Math.abs(offsetFactor)); // 0 at track center -> 1 at outer rim
+      const isRight = offsetFactor >= 0;
+
+      // Eased rise: gentle near the track, climbing steeply only near the rim.
+      const riseCurve = Math.pow(t, 2.1);
+      // Right/left walls use different max heights so the valley isn't a mirror bowl.
+      const maxWallHeight = isRight ? 95 : 78;
+      const wallRise = riseCurve * maxWallHeight;
 
       for (let c = 0; c <= subdivisionsZ; c++) {
         const progress = c / subdivisionsZ;
         const trackPoint = path.getPosition(progress);
         const trackFrame = path.getTrackFrame(progress);
 
-        // Valley bowl contouring: terrain dips lower near center, gently rises far laterally
-        const bowlDip = (1 - Math.cos(offsetFactor * Math.PI * 0.5)) * 18;
         // Section depth variation (Opening Expanse drops deeper)
         const sectionDepth = Math.sin(progress * Math.PI * 2) * 6;
+        // Low-amplitude crest undulation, confined to the outer band, so the
+        // rim isn't a perfectly straight ridge line (one-time build cost only).
+        const wallUndulation =
+          (sampleNoise3D(progress * 6.0 + (isRight ? 31.7 : 4.3), 0, offsetFactor * 2.0) - 0.5) * 14 * t;
 
         const vx = trackPoint.x + trackFrame.right.x * (offsetFactor * halfWidth);
-        const vy = Math.min(trackPoint.y - 12.0, baseDepth) - bowlDip + sectionDepth;
+        const vy = Math.min(trackPoint.y - 12.0, baseDepth) + wallRise + wallUndulation + sectionDepth;
         const vz = trackPoint.z + trackFrame.right.z * (offsetFactor * halfWidth);
 
         rowPath.push(new Vector3(vx, vy, vz));
+
+        // Terrain material color: valley floor -> rising slope -> rim (fades toward fog haze)
+        let cr: number, cg: number, cb: number;
+        if (riseCurve < 0.45) {
+          const f = riseCurve / 0.45;
+          cr = floorColor.r + (slopeColor.r - floorColor.r) * f;
+          cg = floorColor.g + (slopeColor.g - floorColor.g) * f;
+          cb = floorColor.b + (slopeColor.b - floorColor.b) * f;
+        } else {
+          const f = (riseCurve - 0.45) / 0.55;
+          cr = slopeColor.r + (rimColor.r - slopeColor.r) * f;
+          cg = slopeColor.g + (rimColor.g - slopeColor.g) * f;
+          cb = slopeColor.b + (rimColor.b - slopeColor.b) * f;
+        }
+
+        // Restrained low-frequency brightness breakup (large soft regions, not surface noise)
+        const breakup = (sampleNoise3D(vx * 0.012, 0, vz * 0.012) - 0.5) * 0.16;
+        colors.push(
+          Math.max(0, Math.min(1, cr + breakup)),
+          Math.max(0, Math.min(1, cg + breakup)),
+          Math.max(0, Math.min(1, cb + breakup)),
+          1.0
+        );
       }
       paths.push(rowPath);
     }
 
+    // FRONTSIDE only (was DOUBLESIDE): the valley floor is always viewed from
+    // above/outside, and DOUBLESIDE duplicates the vertex buffer internally,
+    // which would silently desync it from the single-sided `colors` array below.
     this.valleyFloorMesh = MeshBuilder.CreateRibbon(
       'valleyFloor',
       {
         pathArray: paths,
-        sideOrientation: Mesh.DOUBLESIDE,
       },
       this.scene
     );
+    this.valleyFloorMesh.setVerticesData('color', colors);
     this.valleyFloorMesh.material = this.terrainMaterial;
   }
 

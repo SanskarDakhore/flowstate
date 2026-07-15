@@ -43,6 +43,11 @@ function noise3D(x: number, y: number, z: number): number {
   return lerp(nxy0, nxy1, sz); // 0..1
 }
 
+/** Exposes the internal value-noise function for low-frequency color/placement variation elsewhere. */
+export function sampleNoise3D(x: number, y: number, z: number): number {
+  return noise3D(x, y, z);
+}
+
 /** Deterministic small numeric seed derived from a string id, for reproducible per-instance variation. */
 export function seedFromId(id: string): number {
   let h = 0;

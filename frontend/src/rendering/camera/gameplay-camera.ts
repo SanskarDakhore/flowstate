@@ -93,16 +93,23 @@ export class GameplayCamera {
     originPos: { x: number; y: number; z: number },
     deltaTimeSeconds: number
   ): void {
-    // Slow, relaxing orbital rotation around starting track area
+    // Slow, relaxing orbital rotation around starting track area — pulled back
+    // and raised to an establishing angle so the title screen frames the valley
+    // (widened terrain + rising walls) instead of being filled by track/rail.
     this.idleAngle += 0.2 * deltaTimeSeconds;
 
-    const orbitRadius = 11.0;
-    const camX = originPos.x + Math.sin(this.idleAngle) * orbitRadius;
-    const camY = originPos.y + 4.5 + Math.sin(this.idleAngle * 0.7) * 1.2;
-    const camZ = originPos.z + Math.cos(this.idleAngle) * orbitRadius - 2.0;
+    // Orbit around a point well down-track (not the origin itself) so the
+    // circling camera stays pointed toward the opening-zone trees/landform
+    // cluster (~40-90m ahead) instead of the empty start of the path.
+    const lookAnchor = new Vector3(originPos.x, originPos.y - 2.0, originPos.z + 55.0);
+
+    const orbitRadius = 45.0;
+    const camX = lookAnchor.x + Math.sin(this.idleAngle) * orbitRadius;
+    const camY = originPos.y + 20.0 + Math.sin(this.idleAngle * 0.7) * 2.0;
+    const camZ = lookAnchor.z + Math.cos(this.idleAngle) * orbitRadius;
 
     const desiredCamPos = new Vector3(camX, camY, camZ);
-    const desiredTargetPos = new Vector3(originPos.x, originPos.y + 1.2, originPos.z + 6.0);
+    const desiredTargetPos = lookAnchor;
 
     const lerpFactor = Math.min(1.0, 4.0 * deltaTimeSeconds);
     Vector3.LerpToRef(this.camera.position, desiredCamPos, lerpFactor, this.camera.position);
