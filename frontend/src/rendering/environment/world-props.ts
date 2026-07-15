@@ -72,7 +72,9 @@ export class WorldEnvironmentProps {
       this.islands.push(island);
     }
 
-    // Generate Rotating Landmark Crystals
+    // Legacy Magenta Crystals disabled for World 01 to eliminate visual color clash
+    // Custom natural resonance stone set-pieces will be designed in a future environmental pass.
+    /*
     const crystalPositions = [0.15, 0.35, 0.6, 0.82];
     crystalPositions.forEach((prog, index) => {
       const pos = path.getPosition(prog);
@@ -81,7 +83,7 @@ export class WorldEnvironmentProps {
 
       const crystalMesh = MeshBuilder.CreatePolyhedron(
         `crystal_${index}`,
-        { type: 1, size: 2.2 }, // Octahedron / Crystal shape
+        { type: 1, size: 2.2 },
         this.scene
       );
 
@@ -93,6 +95,7 @@ export class WorldEnvironmentProps {
       crystalMesh.material = this.crystalMaterial;
       this.crystals.push(crystalMesh);
     });
+    */
   }
 
   public update(deltaTimeSeconds: number): void {

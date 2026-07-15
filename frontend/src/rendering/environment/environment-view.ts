@@ -23,21 +23,55 @@ export class EnvironmentView implements WorldPresentation {
     this.scene = scene;
     this.lighting = lighting;
 
-    // 1. Atmosphere Fog setup using authoritative Dormant Valley palette
+    // 1. Atmosphere Fog setup synchronized to pre-dawn Horizon Ember Seam
     this.scene.fogMode = Scene.FOGMODE_EXP2;
-    this.scene.fogColor = DORMANT_VALLEY_PALETTE.fog.clone();
-    this.scene.fogDensity = 0.0022; // Soft atmospheric depth over 1200m expanse
+    this.scene.fogColor = DORMANT_VALLEY_PALETTE.skyHorizon.clone();
+    this.scene.fogDensity = 0.0016; // Calibrated soft atmospheric depth over 1200m expanse
 
-    // 2. Atmospheric Sky Dome (Inverted sphere wrapping visual volume)
+    // 2. Atmospheric Sky Dome with 3-stop vertical height gradient (Horizon -> Mid -> Zenith)
     this.skyDome = MeshBuilder.CreateSphere(
       'skyDome',
-      { diameter: 2800, segments: 16, sideOrientation: Mesh.BACKSIDE },
+      { diameter: 2800, segments: 24, sideOrientation: Mesh.BACKSIDE },
       scene
     );
+
+    // Compute 3-stop vertical height vertex colors: Horizon Seam (#5C5560) -> Mid Dusk (#3E5068) -> Zenith Indigo (#16202E)
+    const positions = this.skyDome.getVerticesData('position');
+    if (positions) {
+      const colors: number[] = [];
+      const zenith = DORMANT_VALLEY_PALETTE.skyZenith;   // #16202E Indigo
+      const mid = DORMANT_VALLEY_PALETTE.skyMid;         // #3E5068 Dusk Blue
+      const horizon = DORMANT_VALLEY_PALETTE.skyHorizon; // #5C5560 Ember Seam
+
+      for (let i = 0; i < positions.length; i += 3) {
+        const y = positions[i + 1]; // Local Y coordinate
+        // Normalize height ratio: y ranging from -1400 (bottom) to +1400 (zenith)
+        const t = Math.max(0, Math.min(1, (y + 300) / 1700)); // Horizon seam sits low around dome
+
+        let r: number, g: number, b: number;
+        if (t < 0.35) {
+          // Lower band: Horizon Ember Seam -> Muted Dusk Blue
+          const factor = t / 0.35;
+          r = horizon.r + (mid.r - horizon.r) * factor;
+          g = horizon.g + (mid.g - horizon.g) * factor;
+          b = horizon.b + (mid.b - horizon.b) * factor;
+        } else {
+          // Upper band: Muted Dusk Blue -> Pre-dawn Indigo Zenith
+          const factor = (t - 0.35) / 0.65;
+          r = mid.r + (zenith.r - mid.r) * factor;
+          g = mid.g + (zenith.g - mid.g) * factor;
+          b = mid.b + (zenith.b - mid.b) * factor;
+        }
+
+        colors.push(r, g, b, 1.0);
+      }
+      this.skyDome.setVerticesData('color', colors);
+    }
+
     this.skyMat = new StandardMaterial('skyMat', scene);
     this.skyMat.backFaceCulling = false;
     this.skyMat.disableLighting = true;
-    this.skyMat.emissiveColor = DORMANT_VALLEY_PALETTE.skyEmissive.clone();
+    this.skyMat.emissiveColor = new Color3(1, 1, 1);
     this.skyDome.material = this.skyMat;
 
     // 3. Ground Mesh (Disabled in favor of contoured continuous valley floor ribbon)
@@ -83,17 +117,17 @@ export class EnvironmentView implements WorldPresentation {
   }
 
   private applyHarmonyVisuals(val: number): void {
-    // Dormant base slate/sage -> Gentle harmony color boost
-    const baseFog = DORMANT_VALLEY_PALETTE.fog;
-    const fogR = baseFog.r + val * 0.04;
-    const fogG = baseFog.g + val * 0.08;
-    const fogB = baseFog.b + val * 0.12;
+    // Dormant horizon seam -> Gentle harmony color boost
+    const baseHorizon = DORMANT_VALLEY_PALETTE.skyHorizon;
+    const fogR = baseHorizon.r + val * 0.04;
+    const fogG = baseHorizon.g + val * 0.08;
+    const fogB = baseHorizon.b + val * 0.12;
 
     const fogColor = new Color3(fogR, fogG, fogB);
     this.scene.fogColor = fogColor;
     this.scene.clearColor = new Color4(fogR, fogG, fogB, 1.0);
 
-    const baseSky = DORMANT_VALLEY_PALETTE.skyEmissive;
+    const baseSky = DORMANT_VALLEY_PALETTE.skyHorizon;
     const skyR = baseSky.r + val * 0.05;
     const skyG = baseSky.g + val * 0.10;
     const skyB = baseSky.b + val * 0.15;

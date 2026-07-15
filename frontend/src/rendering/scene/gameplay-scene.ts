@@ -22,6 +22,7 @@ import {
 } from '../../game/prototype/prototype-target';
 import { FlowPath } from '../../game/movement/flow-path';
 import { PlayerState } from '../../game/movement/movement-types';
+import { GroundShadowHelper } from '../environment/ground-shadow-helper';
 
 export class GameplayScene {
   public readonly babylonScene: Scene;
@@ -32,6 +33,7 @@ export class GameplayScene {
 
   private glowLayer: GlowLayer | null = null;
   private renderingPipeline: DefaultRenderingPipeline | null = null;
+  private playerGroundShadow: GroundShadowHelper;
 
   private targetMeshes: Map<string, Mesh> = new Map();
   private targetDefinitions: PrototypeTargetDefinition[] = [];
@@ -47,6 +49,7 @@ export class GameplayScene {
     this.camera = new GameplayCamera(this.babylonScene, canvas);
     this.playerView = new BabylonPlayerView(this.babylonScene);
     this.environmentView = new EnvironmentView(this.babylonScene, this.lighting);
+    this.playerGroundShadow = new GroundShadowHelper(this.babylonScene, 'playerGroundShadow', 1.8);
 
     this.initPostProcessingPipeline();
     this.initTargetMaterials();
@@ -132,7 +135,7 @@ export class GameplayScene {
         mainTextureFixedSize: 512,
         blurKernelSize: 32,
       });
-      this.glowLayer.intensity = 0.6;
+      this.glowLayer.intensity = 0.35; // Calibrated restrained glow budget to prevent shape clipping
 
       this.renderingPipeline = new DefaultRenderingPipeline(
         'defaultPipeline',
@@ -142,9 +145,9 @@ export class GameplayScene {
       );
       this.renderingPipeline.fxaaEnabled = true;
       this.renderingPipeline.bloomEnabled = true;
-      this.renderingPipeline.bloomThreshold = 0.75;
-      this.renderingPipeline.bloomWeight = 0.35;
-      this.renderingPipeline.bloomKernel = 32;
+      this.renderingPipeline.bloomThreshold = 0.82;
+      this.renderingPipeline.bloomWeight = 0.18;
+      this.renderingPipeline.bloomKernel = 24;
     } catch (e) {
       console.warn('[GameplayScene] Post-processing pipeline initialization skipped or fallback:', e);
     }
@@ -380,6 +383,14 @@ export class GameplayScene {
         playerState.position.z
       );
 
+      // 2b. Sync grounded player contact shadow position (anchored to track surface under jumps)
+      const groundY = playerState.position.y - playerState.airborneHeight;
+      this.playerGroundShadow.updatePosition(
+        playerState.position.x,
+        groundY,
+        playerState.position.z
+      );
+
       this.playerView.updateVisuals(
         playerState.speed,
         this.environmentView.getHarmonyLevel(),
@@ -414,6 +425,7 @@ export class GameplayScene {
     this.targetMeshes.clear();
     this.renderingPipeline?.dispose();
     this.glowLayer?.dispose();
+    this.playerGroundShadow.dispose();
     this.playerView.dispose();
     this.environmentView.dispose();
     this.camera.dispose();

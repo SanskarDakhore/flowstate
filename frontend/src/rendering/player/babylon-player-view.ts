@@ -10,6 +10,7 @@ import {
 } from '@babylonjs/core';
 import { PlayerView } from './player-view';
 import { PlayerMaterialFactory } from '../materials/player-material';
+import { DORMANT_VALLEY_PALETTE } from '../environment/living-valley-config';
 
 export class BabylonPlayerView implements PlayerView {
   private containerNode: Mesh;
@@ -43,7 +44,7 @@ export class BabylonPlayerView implements PlayerView {
     this.coreMesh = MeshBuilder.CreateSphere('playerCoreMesh', { diameter: 0.45, segments: 16 }, scene);
     this.coreMaterial = new StandardMaterial('playerCoreMat', scene);
     this.coreMaterial.diffuseColor = new Color3(0.8, 0.95, 1.0);
-    this.coreMaterial.emissiveColor = new Color3(0.6, 0.95, 1.0); // Vibrant white-cyan core
+    this.coreMaterial.emissiveColor = DORMANT_VALLEY_PALETTE.playerCore.clone(); // Calibrated crisp bioluminescent core anchor
     this.coreMaterial.specularColor = new Color3(1.0, 1.0, 1.0);
     this.coreMesh.material = this.coreMaterial;
     this.coreMesh.parent = this.containerNode;
@@ -60,7 +61,7 @@ export class BabylonPlayerView implements PlayerView {
     this.haloMesh.parent = this.containerNode;
 
     this.haloMaterial = new StandardMaterial('playerHaloMat', scene);
-    this.haloMaterial.emissiveColor = new Color3(0.1, 0.75, 1.0);
+    this.haloMaterial.emissiveColor = DORMANT_VALLEY_PALETTE.bioluminescence.clone();
     this.haloMaterial.alpha = 0.22;
     this.haloMaterial.backFaceCulling = false;
     this.haloMesh.material = this.haloMaterial;

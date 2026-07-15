@@ -64,20 +64,26 @@ export interface AmbientParticleConfig {
 }
 
 /**
- * Authoritative color palette for World 01 — Dormant / Early Awakening State.
+ * Authoritative color palette for World 01 — Visual Foundation v0.1 (Dormant / Early Awakening).
  * Utilizes Color3.FromHexString for single-source-of-truth accuracy.
  */
 export const DORMANT_VALLEY_PALETTE = {
-  fog: Color3.FromHexString('#A3B5C0'),         // Slate Blue-Grey atmosphere
-  sage: Color3.FromHexString('#8AA38B'),        // Muted Sage valley floor / terrain
-  lavender: Color3.FromHexString('#B8B0C8'),    // Pale Lavender horizon haze
-  slateShadow: Color3.FromHexString('#5C6B73'),  // Deep Slate midground shadow tint
-  skyEmissive: Color3.FromHexString('#8A9BA8'),  // Soft overcast sky dome emission
-  treeTrunk: Color3.FromHexString('#4A5859'),    // Muted Dark Slate Wood
-  treeCanopy: Color3.FromHexString('#6B8E72'),   // Dormant Muted Foliage Green
-  stone: Color3.FromHexString('#7A8B99'),        // Smooth Slate Stone
-  flowerBud: Color3.FromHexString('#C4A8D1'),    // Unopened Soft Lavender Blossom
-  sporeParticle: Color3.FromHexString('#D8E5DB'),// Soft Floating Pollen Spore
+  fog: Color3.FromHexString('#7E8EA0'),         // Deep, clean blue-hour haze seam
+  sage: Color3.FromHexString('#7E9480'),        // Slightly warmer dormant sage terrain
+  slateShadow: Color3.FromHexString('#3E4A57'),  // Darker landform shadow silhouette
+  skyZenith: Color3.FromHexString('#16202E'),    // Pre-dawn Indigo Zenith
+  skyMid: Color3.FromHexString('#3E5068'),       // Muted Dusk Blue
+  skyHorizon: Color3.FromHexString('#5C5560'),   // Ember Haze Horizon Seam
+  sunlightKey: Color3.FromHexString('#6E7E96'),  // Low-angle Cool Moonlight Key
+  ambientSky: Color3.FromHexString('#3A4658'),   // Sky Ambient Bounce
+  ambientGround: Color3.FromHexString('#10141C'),// Ground Cool Bounce
+  treeTrunk: Color3.FromHexString('#3E4A57'),    // Deep Slate Bark
+  treeCanopy: Color3.FromHexString('#5E8069'),   // Deeper Dormant Foliage Green
+  stone: Color3.FromHexString('#5C6B73'),        // Muted Slate Stone
+  flowerBud: Color3.FromHexString('#A892BC'),    // Closed Muted Blossom Bud
+  sporeParticle: Color3.FromHexString('#BFD0D8'),// Cool Rest Motes
+  bioluminescence: Color3.FromHexString('#2FC9E8'),// Organic Teal Rail Accent
+  playerCore: Color3.FromHexString('#99F2FF'),   // Crisp Cool Cyan Anchor
 };
 
 export interface LivingValleyConfig {
@@ -250,7 +256,7 @@ export const LIVING_VALLEY_CONFIG: LivingValleyConfig = {
       lateralSpan: 500,
       asymmetryOffset: -40,
       peakCount: 7,
-      colorHex: '#6E818F',
+      colorHex: '#4A5864',
     },
     {
       id: 'mid-mountain-ridge',
@@ -260,7 +266,7 @@ export const LIVING_VALLEY_CONFIG: LivingValleyConfig = {
       lateralSpan: 750,
       asymmetryOffset: 60,
       peakCount: 9,
-      colorHex: '#8CA1AF',
+      colorHex: '#5C6B78',
     },
     {
       id: 'far-mountain-massif',
@@ -270,28 +276,21 @@ export const LIVING_VALLEY_CONFIG: LivingValleyConfig = {
       lateralSpan: 1100,
       asymmetryOffset: -80,
       peakCount: 12,
-      colorHex: '#B0C0CC',
+      colorHex: '#6F808E',
     },
   ],
   trees: [
-    // Section A
     { id: 'tree_a1', progressAnchor: 0.05, lateralOffset: -26, verticalOffset: -8, scale: 1.2, rotationY: 0.4 },
     { id: 'tree_a2', progressAnchor: 0.12, lateralOffset: 28, verticalOffset: -10, scale: 1.0, rotationY: -0.2 },
     { id: 'tree_a3', progressAnchor: 0.18, lateralOffset: -30, verticalOffset: -12, scale: 1.4, rotationY: 0.8 },
-
-    // Section B
     { id: 'tree_b1', progressAnchor: 0.24, lateralOffset: 25, verticalOffset: -6, scale: 1.1, rotationY: -0.5 },
     { id: 'tree_b2', progressAnchor: 0.30, lateralOffset: -28, verticalOffset: -4, scale: 1.5, rotationY: 0.3 },
     { id: 'tree_b3', progressAnchor: 0.38, lateralOffset: 32, verticalOffset: -5, scale: 1.3, rotationY: 0.7 },
     { id: 'tree_b4', progressAnchor: 0.44, lateralOffset: -26, verticalOffset: -7, scale: 1.0, rotationY: -0.6 },
-
-    // Section C
     { id: 'tree_c1', progressAnchor: 0.50, lateralOffset: 27, verticalOffset: -3, scale: 1.4, rotationY: 0.2 },
     { id: 'tree_c2', progressAnchor: 0.58, lateralOffset: -34, verticalOffset: -2, scale: 1.6, rotationY: -0.4 },
     { id: 'tree_c3', progressAnchor: 0.64, lateralOffset: 30, verticalOffset: -1, scale: 1.2, rotationY: 0.5 },
     { id: 'tree_c4', progressAnchor: 0.72, lateralOffset: -29, verticalOffset: -4, scale: 1.3, rotationY: -0.1 },
-
-    // Section D
     { id: 'tree_d1', progressAnchor: 0.78, lateralOffset: 35, verticalOffset: -5, scale: 1.5, rotationY: 0.9 },
     { id: 'tree_d2', progressAnchor: 0.85, lateralOffset: -38, verticalOffset: -6, scale: 1.7, rotationY: -0.3 },
     { id: 'tree_d3', progressAnchor: 0.92, lateralOffset: 40, verticalOffset: -8, scale: 1.4, rotationY: 0.4 },
