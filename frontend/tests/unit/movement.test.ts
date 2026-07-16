@@ -81,7 +81,7 @@ describe('Timestep Tolerance Testing (30 FPS vs 60 FPS vs 120 FPS)', () => {
 
       const dt = 1.0 / fps;
       const steps = Math.round(durationSeconds / dt);
-      const intent = { horizontal: 0.4, vertical: -0.2, actionHeld: false, jumpPressed: false };
+      const intent = sanitizeIntent({ horizontal: 0.4, vertical: -0.2, actionHeld: false, jumpPressed: false });
 
       for (let i = 0; i < steps; i++) {
         state = model.update(state, intent, dt);
@@ -123,7 +123,7 @@ describe('Free Flow Boundary Restitution', () => {
     };
     model.initialize(state);
 
-    const intent = { horizontal: 1.0, vertical: 0.0, actionHeld: false, jumpPressed: false };
+    const intent = sanitizeIntent({ horizontal: 1.0, vertical: 0.0, actionHeld: false, jumpPressed: false });
     const dt = 0.016;
 
     for (let i = 0; i < 500; i++) {

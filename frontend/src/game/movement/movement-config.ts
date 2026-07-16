@@ -1,6 +1,16 @@
-export interface MovementPhysicsConfig {
+import {
+  MovementConfig as BaseMovementConfig,
+  PhysicsConfig,
+  DEFAULT_MOVEMENT_CONFIG,
+  DEFAULT_PHYSICS_CONFIG,
+  DEFAULT_JUMP_PROFILE,
+  JumpProfile,
+} from '../config/movement-config';
+
+export * from '../config/movement-config';
+
+export interface MovementPhysicsConfig extends PhysicsConfig {
   playerRadius: number;
-  gravity: number;
   jumpImpulse: number;
   secondaryJumpImpulse: number;
   maxJumps: number;
@@ -9,18 +19,18 @@ export interface MovementPhysicsConfig {
   gravityScale?: number;
 }
 
-export const DEFAULT_PHYSICS_CONFIG: MovementPhysicsConfig = {
+export const DEFAULT_PHYSICS_CONFIG_EXTENDED: MovementPhysicsConfig = {
+  ...DEFAULT_PHYSICS_CONFIG,
   playerRadius: 0.45,
-  gravity: -28.0,
-  jumpImpulse: 10.5,
+  jumpImpulse: DEFAULT_JUMP_PROFILE.initialImpulse,
   secondaryJumpImpulse: 9.0,
-  maxJumps: 2,
-  maxFallSpeed: -40.0,
+  maxJumps: DEFAULT_MOVEMENT_CONFIG.maxJumpCount,
+  maxFallSpeed: DEFAULT_PHYSICS_CONFIG.terminalVerticalVelocity,
   boundarySafetyMargin: 0.5,
   gravityScale: 1.0,
 };
 
-export interface MovementConfig extends MovementPhysicsConfig {
+export interface LegacyMovementConfig extends BaseMovementConfig, MovementPhysicsConfig {
   baseForwardSpeed: number;
   maximumSpeed: number;
   acceleration: number;
@@ -36,8 +46,11 @@ export interface MovementConfig extends MovementPhysicsConfig {
   inputSmoothingFactor: number;
 }
 
+export type MovementConfig = LegacyMovementConfig;
+
 export const DEFAULT_GUIDED_FLOW_CONFIG: MovementConfig = {
-  ...DEFAULT_PHYSICS_CONFIG,
+  ...DEFAULT_MOVEMENT_CONFIG,
+  ...DEFAULT_PHYSICS_CONFIG_EXTENDED,
   baseForwardSpeed: 12.0,
   maximumSpeed: 20.0,
   acceleration: 15.0,
@@ -54,7 +67,8 @@ export const DEFAULT_GUIDED_FLOW_CONFIG: MovementConfig = {
 };
 
 export const DEFAULT_FREE_FLOW_CONFIG: MovementConfig = {
-  ...DEFAULT_PHYSICS_CONFIG,
+  ...DEFAULT_MOVEMENT_CONFIG,
+  ...DEFAULT_PHYSICS_CONFIG_EXTENDED,
   baseForwardSpeed: 10.0,
   maximumSpeed: 18.0,
   acceleration: 12.0,
@@ -71,7 +85,8 @@ export const DEFAULT_FREE_FLOW_CONFIG: MovementConfig = {
 };
 
 export const DEFAULT_BRANCHING_FLOW_CONFIG: MovementConfig = {
-  ...DEFAULT_PHYSICS_CONFIG,
+  ...DEFAULT_MOVEMENT_CONFIG,
+  ...DEFAULT_PHYSICS_CONFIG_EXTENDED,
   baseForwardSpeed: 11.0,
   maximumSpeed: 19.0,
   acceleration: 14.0,

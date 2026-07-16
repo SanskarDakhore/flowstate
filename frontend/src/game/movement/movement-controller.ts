@@ -1,10 +1,12 @@
 import { MovementModel } from './movement-model';
-import { PlayerState, MovementModelId, Vector3State } from './movement-types';
+import { PlayerState, MovementModelId, Vector3State, MovementState, JumpState, GravityPhase, getMomentumQuality } from './movement-types';
 import { MovementIntent, createEmptyIntent, sanitizeIntent } from './movement-intent';
 import { GuidedFlowMovement } from './models/guided-flow-movement';
 import { FreeFlowMovement } from './models/free-flow-movement';
 import { BranchingFlowMovement } from './models/branching-flow-movement';
 import { MovementConfig, DEFAULT_GUIDED_FLOW_CONFIG } from './movement-config';
+import { MovementEventDispatcher } from './movement-events';
+import { DebugTelemetry } from '../telemetry/debug-telemetry';
 
 export class MovementController {
   private activeModel: MovementModel;
@@ -23,9 +25,9 @@ export class MovementController {
     this.smoothingFactor = config.inputSmoothingFactor;
 
     // Instantiate models
-    const guided = new GuidedFlowMovement();
-    const free = new FreeFlowMovement();
-    const branching = new BranchingFlowMovement();
+    const guided = new GuidedFlowMovement(config);
+    const free = new FreeFlowMovement(config);
+    const branching = new BranchingFlowMovement(config);
 
     this.availableModels.set('guided-flow', guided);
     this.availableModels.set('free-flow', free);
@@ -35,6 +37,9 @@ export class MovementController {
 
     this.playerState = this.createInitialPlayerState();
     this.activeModel.initialize(this.playerState);
+
+    // Register active telemetry provider with DebugTelemetry singleton
+    DebugTelemetry.register('movement', () => this.getMovementState());
   }
 
   private createInitialPlayerState(): PlayerState {
@@ -66,16 +71,33 @@ export class MovementController {
     const sanitized = sanitizeIntent(rawIntent);
     const alpha = Math.min(1.0, this.smoothingFactor * clampedDelta);
 
-    this.smoothedIntent = {
-      horizontal: this.smoothedIntent.horizontal + (sanitized.horizontal - this.smoothedIntent.horizontal) * alpha,
-      vertical: this.smoothedIntent.vertical + (sanitized.vertical - this.smoothedIntent.vertical) * alpha,
-      actionHeld: sanitized.actionHeld,
+    const prevH = this.smoothedIntent.horizontal ?? 0;
+    const prevV = this.smoothedIntent.vertical ?? 0;
+    const sanH = sanitized.horizontal ?? 0;
+    const sanV = sanitized.vertical ?? 0;
+
+    const nextH = prevH + (sanH - prevH) * alpha;
+    const nextV = prevV + (sanV - prevV) * alpha;
+
+    this.smoothedIntent = sanitizeIntent({
+      horizontal: nextH,
+      vertical: nextV,
+      desiredDirection: sanitized.desiredDirection,
+      desiredSpeed: sanitized.desiredSpeed,
       jumpPressed: sanitized.jumpPressed,
+      jumpHeld: sanitized.jumpHeld,
+      actionHeld: sanitized.actionHeld,
       action: sanitized.action,
-    };
+    });
 
     // 3. Update authoritative movement state through active model
     this.playerState = this.activeModel.update(this.playerState, this.smoothedIntent, clampedDelta);
+
+    // Expose active MovementState globally for dev telemetry compatibility
+    if (typeof window !== 'undefined' && this.playerState.movementState) {
+      (window as any).__FLOWSTATE_MOVEMENT_STATE__ = this.playerState.movementState;
+    }
+
     return { ...this.playerState };
   }
 
@@ -103,6 +125,49 @@ export class MovementController {
 
   public getPlayerState(): PlayerState {
     return { ...this.playerState };
+  }
+
+  public getMovementState(): MovementState {
+    if (this.playerState.movementState) {
+      return { ...this.playerState.movementState };
+    }
+
+    const score = 100;
+    return {
+      isGrounded: this.playerState.isGrounded,
+      isAirborne: !this.playerState.isGrounded,
+      isCoyoteWindowActive: false,
+      isJumpBuffered: false,
+      coyoteTimer: 0,
+      jumpBufferTimer: 0,
+      currentJumpCount: this.playerState.jumpsUsed,
+      jumpState: this.playerState.isGrounded ? JumpState.Grounded : JumpState.Ascending,
+      jumpId: 0,
+      landingImpact: Math.abs(this.playerState.impactVelocity),
+      verticalVelocity: this.playerState.verticalVelocity,
+      airborneHeight: this.playerState.airborneHeight,
+      currentHorizontalVelocityVector: { x: this.playerState.velocity.x, z: this.playerState.velocity.z },
+      momentumMagnitude: this.playerState.speed,
+      momentumScore: score,
+      momentumQuality: getMomentumQuality(score),
+      flowEfficiency: 1.0,
+      activeGravityPhase: this.playerState.isGrounded ? GravityPhase.Grounded : GravityPhase.Ascending,
+      activeEnvironmentProfileId: 'terrestrial-ground',
+      activeMovementProfileId: 'default-responsive',
+      currentAirControl: 0.6,
+      appliedGravity: -28.0,
+      targetSpeed: 20.0,
+      desiredVelocity: { x: 0, z: 0 },
+      velocityError: 0,
+      directionDelta: 0,
+    };
+  }
+
+  public getEventDispatcher(): MovementEventDispatcher | null {
+    if ('getControlEngine' in this.activeModel && typeof (this.activeModel as any).getControlEngine === 'function') {
+      return (this.activeModel as any).getControlEngine().getEventDispatcher();
+    }
+    return null;
   }
 
   public getActiveModelId(): MovementModelId {

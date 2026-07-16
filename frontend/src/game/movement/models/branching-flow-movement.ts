@@ -1,6 +1,6 @@
 import { MovementModel } from '../movement-model';
 import { PlayerState, MovementModelId } from '../movement-types';
-import { MovementIntent } from '../movement-intent';
+import { MovementIntent, sanitizeIntent } from '../movement-intent';
 import { MovementConfig, DEFAULT_BRANCHING_FLOW_CONFIG } from '../movement-config';
 import { FlowPath, MathFlowPath } from '../flow-path';
 import { GuidedFlowMovement } from './guided-flow-movement';
@@ -26,20 +26,23 @@ export class BranchingFlowMovement implements MovementModel {
 
   public update(
     state: PlayerState,
-    intent: MovementIntent,
+    intent: Partial<MovementIntent>,
     deltaTime: number
   ): PlayerState {
+    const sanitized = sanitizeIntent(intent);
+    const h = sanitized.horizontal ?? 0;
+
     // Detect steering intent to select branch
-    if (intent.horizontal < -0.4) {
+    if (h < -0.4) {
       this.selectedBranch = 'LEFT';
-    } else if (intent.horizontal > 0.4) {
+    } else if (h > 0.4) {
       this.selectedBranch = 'RIGHT';
-    } else if (Math.abs(intent.horizontal) < 0.1) {
+    } else if (Math.abs(h) < 0.1) {
       this.selectedBranch = 'CENTER';
     }
 
     // Delegation to guided movement with branch selection bias
-    return this.guidedModel.update(state, intent, deltaTime);
+    return this.guidedModel.update(state, sanitized, deltaTime);
   }
 
   public reset(): void {

@@ -1,15 +1,15 @@
 import { MovementModel } from '../movement-model';
 import { PlayerState, MovementModelId } from '../movement-types';
-import { MovementIntent } from '../movement-intent';
+import { MovementIntent, sanitizeIntent } from '../movement-intent';
 import { MovementConfig, DEFAULT_GUIDED_FLOW_CONFIG } from '../movement-config';
 import { FlowPath, MathFlowPath } from '../flow-path';
-import { VerticalPhysics } from '../vertical-physics';
+import { MovementControlEngine } from '../movement-control-engine';
 
 export class GuidedFlowMovement implements MovementModel {
   public readonly id: MovementModelId = 'guided-flow';
   private config: MovementConfig;
   private path: FlowPath;
-  private verticalPhysics: VerticalPhysics;
+  private controlEngine: MovementControlEngine;
 
   private currentProgress: number = 0;
   private lateralOffset: number = 0;
@@ -22,7 +22,7 @@ export class GuidedFlowMovement implements MovementModel {
   ) {
     this.config = config;
     this.path = path;
-    this.verticalPhysics = new VerticalPhysics(this.config);
+    this.controlEngine = new MovementControlEngine(this.config);
   }
 
   public initialize(initialState: PlayerState): void {
@@ -34,12 +34,14 @@ export class GuidedFlowMovement implements MovementModel {
 
   public update(
     state: PlayerState,
-    intent: MovementIntent,
+    intent: Partial<MovementIntent>,
     deltaTime: number
   ): PlayerState {
     if (deltaTime <= 0) {
       return state;
     }
+
+    const sanitized = sanitizeIntent(intent);
 
     // 1. Advance longitudinal progress along path
     const distanceDelta = this.config.baseForwardSpeed * deltaTime;
@@ -47,29 +49,34 @@ export class GuidedFlowMovement implements MovementModel {
     this.currentProgress = Math.min(1.0, this.currentProgress + progressDelta);
 
     // 2. Adjust lateral steering offset
-    const targetLateralVelocity = intent.horizontal * this.config.horizontalResponsiveness;
+    const targetLateralVelocity = (sanitized.horizontal ?? 0) * this.config.horizontalResponsiveness;
     this.lateralOffset += targetLateralVelocity * deltaTime;
 
     const maxLateral = this.config.maximumLateralOffset;
     this.lateralOffset = Math.max(-maxLateral, Math.min(maxLateral, this.lateralOffset));
 
-    if (Math.abs(intent.horizontal) < 0.05) {
+    if (Math.abs(sanitized.horizontal ?? 0) < 0.05) {
       this.lateralOffset *= Math.exp(-this.config.drag * deltaTime);
     }
 
-    // 3. Shared vertical physics evaluation
-    const vResult = this.verticalPhysics.update(intent.jumpPressed, deltaTime);
+    // 3. Centralized movement control engine evaluation
+    const { kinematics, movementState } = this.controlEngine.update(
+      sanitized,
+      deltaTime,
+      state.position,
+      state.velocity
+    );
 
-    if (vResult.jumpTriggered) {
+    if (kinematics.jumpTriggeredThisFrame) {
       this.jumpEventCounter++;
-      this.lastJumpIndex = vResult.jumpIndex;
+      this.lastJumpIndex = movementState.currentJumpCount;
     }
 
     // 4. Derive authoritative simulation position using TrackFrame
     const worldPos = this.path.trackToWorld(
       this.currentProgress,
       this.lateralOffset,
-      this.config.playerRadius + vResult.airborneHeight
+      this.config.playerRadius + kinematics.airborneHeight
     );
 
     const trackFrame = this.path.getTrackFrame(this.currentProgress);
@@ -83,15 +90,16 @@ export class GuidedFlowMovement implements MovementModel {
       velocity: { x: velocityX, y: velocityY, z: velocityZ },
       forward: trackFrame.forward,
       speed: Math.sqrt(velocityX * velocityX + velocityY * velocityY + velocityZ * velocityZ),
-      airborneHeight: vResult.airborneHeight,
-      verticalVelocity: vResult.verticalVelocity,
-      isGrounded: vResult.isGrounded,
-      impactVelocity: vResult.impactVelocity,
-      justLanded: vResult.justLanded,
-      jumpsUsed: vResult.jumpsUsed,
-      maxJumps: this.config.maxJumps,
+      airborneHeight: kinematics.airborneHeight,
+      verticalVelocity: kinematics.verticalVelocity,
+      isGrounded: kinematics.isGrounded,
+      impactVelocity: kinematics.impactVelocity,
+      justLanded: kinematics.justLanded,
+      jumpsUsed: movementState.currentJumpCount,
+      maxJumps: this.config.maxJumpCount,
       jumpEventCounter: this.jumpEventCounter,
       lastJumpIndex: this.lastJumpIndex,
+      movementState,
     };
   }
 
@@ -100,7 +108,7 @@ export class GuidedFlowMovement implements MovementModel {
     this.lateralOffset = 0;
     this.jumpEventCounter = 0;
     this.lastJumpIndex = 0;
-    this.verticalPhysics.reset();
+    this.controlEngine.reset();
   }
 
   public getProgress(): number {
@@ -109,5 +117,9 @@ export class GuidedFlowMovement implements MovementModel {
 
   public setPath(newPath: FlowPath): void {
     this.path = newPath;
+  }
+
+  public getControlEngine(): MovementControlEngine {
+    return this.controlEngine;
   }
 }

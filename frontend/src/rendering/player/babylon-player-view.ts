@@ -11,6 +11,9 @@ import {
 import { PlayerView } from './player-view';
 import { PlayerMaterialFactory } from '../materials/player-material';
 import { GOLDEN_HOUR_VALLEY_PALETTE } from '../environment/living-valley-config';
+import { PlayerExpressionController } from '../../game/player/player-expression-controller';
+import { MovementState, JumpState, GravityPhase, getMomentumQuality } from '../../game/movement/movement-types';
+import { MovementEventDispatcher } from '../../game/movement/movement-events';
 
 export class BabylonPlayerView implements PlayerView {
   private containerNode: Mesh;
@@ -23,18 +26,16 @@ export class BabylonPlayerView implements PlayerView {
   private particleSystem: ParticleSystem | null = null;
   private scene: Scene;
 
-  private currentPulseTime: number = 0;
-  private landingSquashTimer: number = 0;
+  private expressionController: PlayerExpressionController;
+
   private flareTimer: number = 0;
   private boundaryDisruptionTimer: number = 0;
-  private readonly SQUASH_DURATION: number = 0.22;
-
-  // Jump Event Consumption State
   private lastObservedJumpCounter: number = 0;
   private activeEnergyRings: Array<{ mesh: Mesh; material: StandardMaterial; timer: number }> = [];
 
-  constructor(scene: Scene) {
+  constructor(scene: Scene, dispatcher: MovementEventDispatcher | null = null) {
     this.scene = scene;
+    this.expressionController = new PlayerExpressionController(undefined, dispatcher);
 
     // 1. Root Container Node (Handles spatial translation and orientation)
     this.containerNode = new Mesh('playerRootNode', scene);
@@ -44,7 +45,7 @@ export class BabylonPlayerView implements PlayerView {
     this.coreMesh = MeshBuilder.CreateSphere('playerCoreMesh', { diameter: 0.45, segments: 16 }, scene);
     this.coreMaterial = new StandardMaterial('playerCoreMat', scene);
     this.coreMaterial.diffuseColor = new Color3(0.8, 0.95, 1.0);
-    this.coreMaterial.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.playerCore.clone(); // Calibrated crisp bioluminescent core anchor
+    this.coreMaterial.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.playerCore.clone();
     this.coreMaterial.specularColor = new Color3(1.0, 1.0, 1.0);
     this.coreMesh.material = this.coreMaterial;
     this.coreMesh.parent = this.containerNode;
@@ -104,6 +105,10 @@ export class BabylonPlayerView implements PlayerView {
     }
   }
 
+  public getExpressionController(): PlayerExpressionController {
+    return this.expressionController;
+  }
+
   public updateVisuals(
     speed: number,
     harmony: number,
@@ -112,11 +117,10 @@ export class BabylonPlayerView implements PlayerView {
     justLanded: boolean = false,
     jumpEventCounter: number = 0,
     lastJumpIndex: number = 0,
-    deltaTimeSeconds: number = 0.016
+    deltaTimeSeconds: number = 0.016,
+    movementState?: MovementState
   ): void {
-    this.currentPulseTime += deltaTimeSeconds * 3.0;
-
-    // Detect new jump events monotonically
+    // Detect new jump events monotonically for energy ring presentation
     if (jumpEventCounter > this.lastObservedJumpCounter) {
       this.lastObservedJumpCounter = jumpEventCounter;
       if (lastJumpIndex === 1) {
@@ -126,60 +130,50 @@ export class BabylonPlayerView implements PlayerView {
       }
     }
 
-    // Trigger visual squash animation on landing impact
-    if (justLanded) {
-      this.landingSquashTimer = this.SQUASH_DURATION;
-    }
+    // Construct or extract read-only state snapshot
+    const momScore = movementState?.momentumScore ?? (harmony * 100);
+    const movState: MovementState = movementState ?? {
+      isGrounded: airborneHeight <= 0,
+      isAirborne: airborneHeight > 0,
+      isCoyoteWindowActive: false,
+      isJumpBuffered: false,
+      coyoteTimer: 0,
+      jumpBufferTimer: 0,
+      currentJumpCount: lastJumpIndex,
+      jumpState: airborneHeight <= 0 ? JumpState.Grounded : (verticalVelocity > 0 ? JumpState.Ascending : JumpState.Descending),
+      jumpId: jumpEventCounter,
+      landingImpact: justLanded ? 10.0 : 0,
+      verticalVelocity,
+      airborneHeight,
+      currentHorizontalVelocityVector: { x: 0, z: speed },
+      momentumMagnitude: speed,
+      momentumScore: momScore,
+      momentumQuality: getMomentumQuality(momScore),
+      flowEfficiency: harmony,
+      activeGravityPhase: airborneHeight <= 0 ? GravityPhase.Grounded : (verticalVelocity > 0 ? GravityPhase.Ascending : GravityPhase.Descending),
+      activeEnvironmentProfileId: 'terrestrial-ground',
+      activeMovementProfileId: 'default-responsive',
+      currentAirControl: 0.6,
+      appliedGravity: -28.0,
+      targetSpeed: 20.0,
+      desiredVelocity: { x: 0, z: speed },
+      velocityError: 0,
+      directionDelta: 0,
+    };
 
-    // 1. Layer-3 Visual Mesh Scaling (Squash & Stretch & Velocity Elongation)
-    let scaleX = 1.0;
-    let scaleY = 1.0;
-    let scaleZ = 1.0;
+    // Passive Renderer Adapter Rule: Delegate calculation completely to expression controller
+    const expressionState = this.expressionController.update(
+      movState,
+      { x: this.containerNode.position.x, y: this.containerNode.position.y - 0.45, z: this.containerNode.position.z },
+      deltaTimeSeconds
+    );
 
-    if (this.landingSquashTimer > 0) {
-      this.landingSquashTimer -= deltaTimeSeconds;
-      const progress = 1.0 - Math.max(0, this.landingSquashTimer / this.SQUASH_DURATION);
-
-      if (progress < 0.4) {
-        const t = progress / 0.4;
-        scaleY = 1.0 - t * 0.20; // 0.80 vertical height
-        scaleX = 1.0 + t * 0.14; // 1.14 horizontal width
-        scaleZ = scaleX;
-      } else if (progress < 0.8) {
-        const t = (progress - 0.4) / 0.4;
-        scaleY = 0.80 + t * 0.32; // 1.12 vertical stretch
-        scaleX = 1.14 - t * 0.22; // 0.92 horizontal contraction
-        scaleZ = scaleX;
-      } else {
-        const t = (progress - 0.8) / 0.2;
-        scaleY = 1.12 - t * 0.12; // 1.00
-        scaleX = 0.92 + t * 0.08; // 1.00
-        scaleZ = scaleX;
-      }
-    } else if (airborneHeight > 0) {
-      if (verticalVelocity > 3.0) {
-        scaleY = 1.12;
-        scaleX = 0.92;
-        scaleZ = 0.94;
-      } else if (verticalVelocity < -5.0) {
-        scaleY = 0.92;
-        scaleX = 1.05;
-        scaleZ = 1.05;
-      }
-    }
-
-    // Directional speed droplet elongation
-    const normalizedSpeed = Math.min(1.0, speed / 20.0);
-    const speedStretchZ = 1.0 + normalizedSpeed * 0.25;
-    const speedSquashXY = 1.0 - normalizedSpeed * 0.10;
-
+    // 1. Apply pre-computed scale transform
+    const { x: scaleX, y: scaleY, z: scaleZ } = expressionState.scaleTransform;
     this.coreMesh.scaling.set(scaleX, scaleY, scaleZ);
-    this.shellMesh.scaling.set(scaleX * speedSquashXY, scaleY * speedSquashXY, scaleZ * speedStretchZ);
+    this.shellMesh.scaling.set(scaleX, scaleY, scaleZ);
 
-    // Update active second-jump energy rings
-    this.updateEnergyRings(deltaTimeSeconds);
-
-    // 2. Halo breathing pulse, flare boost & boundary disruption wobble
+    // 2. Apply MaterialExpression shading
     let flareBoost = 0;
     if (this.flareTimer > 0) {
       this.flareTimer -= deltaTimeSeconds;
@@ -192,17 +186,24 @@ export class BabylonPlayerView implements PlayerView {
       disruptionWobble = Math.sin(this.boundaryDisruptionTimer * 30.0) * 0.18;
     }
 
-    const pulseFactor = 0.08 * Math.sin(this.currentPulseTime) + flareBoost * 0.25 + disruptionWobble;
-    this.haloMesh.scaling.set(1.0 + pulseFactor, 1.0 + pulseFactor, 1.0 + pulseFactor);
-    this.haloMaterial.alpha = 0.22 + 0.1 * Math.sin(this.currentPulseTime * 1.5) + flareBoost * 0.45;
+    const mat = expressionState.material;
+    const pulseFactor = 0.08 * Math.sin(mat.pulsePhase * 3.0) + flareBoost * 0.25 + disruptionWobble;
 
-    // 3. Dynamic speed trail particle adjustment with resonance flare boost
+    this.haloMesh.scaling.set(1.0 + pulseFactor, 1.0 + pulseFactor, 1.0 + pulseFactor);
+    this.haloMaterial.alpha = Math.min(1.0, mat.glowAlpha + flareBoost * 0.35);
+    this.shellMaterial.alpha = mat.surfaceOpacity;
+
+    // 3. Apply TrailExpression to particle system
     if (this.particleSystem) {
+      const trail = expressionState.trail;
       const flareParticles = Math.round(flareBoost * 120);
-      this.particleSystem.emitRate = Math.round(20 + normalizedSpeed * 80 + harmony * 40) + flareParticles;
-      this.particleSystem.minEmitPower = 1.0 + normalizedSpeed * 3.0 + flareBoost * 2.0;
-      this.particleSystem.maxEmitPower = 2.0 + normalizedSpeed * 5.0 + flareBoost * 3.0;
+      this.particleSystem.emitRate = Math.round(20 + trail.opacity * 60 + harmony * 40) + flareParticles;
+      this.particleSystem.minEmitPower = 1.0 + trail.intensity * 3.0 + flareBoost * 2.0;
+      this.particleSystem.maxEmitPower = 2.0 + trail.intensity * 5.0 + flareBoost * 3.0;
     }
+
+    // Update active second-jump energy rings
+    this.updateEnergyRings(deltaTimeSeconds);
   }
 
   public triggerTargetPassFlare(): void {
@@ -210,18 +211,16 @@ export class BabylonPlayerView implements PlayerView {
   }
 
   public triggerFirstJumpVfx(): void {
-    // 1st jump releases immediate kinetic vertical impulse
     this.coreMaterial.emissiveColor = new Color3(0.8, 1.0, 1.0);
     setTimeout(() => {
       if (this.coreMaterial) {
-        this.coreMaterial.emissiveColor = new Color3(0.6, 0.95, 1.0);
+        this.coreMaterial.emissiveColor = GOLDEN_HOUR_VALLEY_PALETTE.playerCore.clone();
       }
     }, 120);
   }
 
   private triggerSecondJumpVfx(): void {
     try {
-      // 2nd Jump creates dual concentric expanding resonance wave rings
       const innerRing = MeshBuilder.CreateTorus(
         'secondJumpRingInner',
         { diameter: 1.0, thickness: 0.12, tessellation: 24 },
@@ -276,17 +275,18 @@ export class BabylonPlayerView implements PlayerView {
 
   public resetVisualState(): void {
     this.lastObservedJumpCounter = 0;
-    this.landingSquashTimer = 0;
     this.flareTimer = 0;
     this.boundaryDisruptionTimer = 0;
     this.coreMesh.scaling.set(1, 1, 1);
     this.shellMesh.scaling.set(1, 1, 1);
     this.activeEnergyRings.forEach((e) => e.mesh.dispose());
     this.activeEnergyRings = [];
+    this.expressionController.reset();
   }
 
   public dispose(): void {
     this.resetVisualState();
+    this.expressionController.dispose();
     if (this.particleSystem) {
       this.particleSystem.stop();
       this.particleSystem.dispose();

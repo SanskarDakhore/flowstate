@@ -1,9 +1,13 @@
 :root {
     --flow-bg-dark: #050810;
     --flow-bg-scrim: rgba(5, 8, 16, 0.6);
+    --flow-text-scrim: rgba(5, 8, 16, 0.85);
     --flow-cyan-kinetic: #38bdf8;
     --flow-cyan-velocity: #06b6d4;
     --flow-solar-champagne: #fde68a;
+    --flow-status-success: #34d399;
+    --flow-status-warning: #f59e0b;
+    --flow-status-danger: #f87171;
     --flow-text-primary: #f8fafc;
     --flow-text-muted: rgba(248, 250, 252, 0.4);
     --flow-text-ghost: rgba(248, 250, 252, 0.15);

@@ -1,12 +1,12 @@
 import { Scene, TargetCamera, Vector3 } from '@babylonjs/core';
+import { CameraPresentationController } from '../../game/presentation/camera-presentation-controller';
+import { CameraPresentationState, DEFAULT_PRESENTATION_PROFILE } from '../../game/presentation/presentation-profile';
 
 export type CameraMode = 'CINEMATIC_IDLE' | 'PLAYING';
 
 export class GameplayCamera {
   private camera: TargetCamera;
-  private baseOffset = new Vector3(0, 3.8, -8.5);
   private currentTarget = new Vector3(0, 0, 0);
-  private currentRoll: number = 0;
   private baseFov: number = 0.8;
 
   // Cinematic / Title Orbit State
@@ -14,10 +14,18 @@ export class GameplayCamera {
   private idleAngle: number = 0;
   private transitionAlpha: number = 0; // 0 = fully cinematic, 1 = fully gameplay
 
-  constructor(scene: Scene, canvas: HTMLCanvasElement) {
+  private cameraController: CameraPresentationController;
+
+  constructor(scene: Scene, _canvas: HTMLCanvasElement) {
     this.camera = new TargetCamera('gameplayCamera', new Vector3(0, 5.0, -10.0), scene);
     this.camera.fov = this.baseFov;
     this.camera.setTarget(new Vector3(0, 1.0, 5.0));
+
+    this.cameraController = new CameraPresentationController(DEFAULT_PRESENTATION_PROFILE.camera);
+  }
+
+  public getCameraController(): CameraPresentationController {
+    return this.cameraController;
   }
 
   public setMode(newMode: CameraMode): void {
@@ -26,8 +34,10 @@ export class GameplayCamera {
 
     if (newMode === 'PLAYING') {
       this.transitionAlpha = 0; // Start smooth interpolation swing into chase perspective
+      this.cameraController.setMode('Playing');
     } else {
       this.transitionAlpha = 0;
+      this.cameraController.setMode('Idle');
     }
   }
 
@@ -35,11 +45,37 @@ export class GameplayCamera {
     return this.mode;
   }
 
+  public applyPresentationState(state: CameraPresentationState, deltaTimeSeconds: number = 0.016): void {
+    if (this.mode === 'CINEMATIC_IDLE') {
+      this.updateCinematicOrbit(state.lookTarget, deltaTimeSeconds);
+      return;
+    }
+
+    // Passive Adapter Execution: Apply calculated camera position, target, and FOV directly
+    const targetPos = new Vector3(state.lookTarget.x, state.lookTarget.y, state.lookTarget.z);
+    const camPos = new Vector3(state.position.x, state.position.y, state.position.z);
+
+    if (this.transitionAlpha < 1.0) {
+      this.transitionAlpha = Math.min(1.0, this.transitionAlpha + 1.8 * deltaTimeSeconds);
+      const easeAlpha = this.easeInOutCubic(this.transitionAlpha);
+
+      Vector3.LerpToRef(this.currentTarget, targetPos, easeAlpha, this.currentTarget);
+      Vector3.LerpToRef(this.camera.position, camPos, easeAlpha, this.camera.position);
+    } else {
+      this.currentTarget.copyFrom(targetPos);
+      this.camera.position.copyFrom(camPos);
+    }
+
+    this.camera.setTarget(this.currentTarget);
+    this.camera.rotation.z = state.rollAngle; // Locked to 0.0 for stability
+    this.camera.fov = state.fov;
+  }
+
   public updateTarget(
     targetPosition: { x: number; y: number; z: number },
     forward: { x: number; y: number; z: number } = { x: 0, y: 0, z: 1 },
     speed: number = 10,
-    lateralIntent: number = 0,
+    _lateralIntent: number = 0,
     deltaTimeSeconds: number = 0.016
   ): void {
     if (this.mode === 'CINEMATIC_IDLE') {
@@ -47,62 +83,30 @@ export class GameplayCamera {
       return;
     }
 
-    // 1. Compute dynamic look-ahead target vector for active gameplay
-    const lookAheadDistance = Math.min(6.0, 2.0 + (speed / 20.0) * 4.0);
-    const desiredTarget = new Vector3(
-      targetPosition.x + forward.x * lookAheadDistance,
-      targetPosition.y + forward.y * lookAheadDistance,
-      targetPosition.z + forward.z * lookAheadDistance
+    // Fallback adapter path: run presentation controller tick directly
+    const cameraState = this.cameraController.update(
+      {
+        targetPosition,
+        velocity: { x: forward.x * speed, y: forward.y * speed, z: forward.z * speed },
+        desiredFacingDirection: forward,
+        speed,
+        isGrounded: true,
+        verticalVelocity: forward.y * speed,
+        landingImpact: 0,
+      },
+      deltaTimeSeconds
     );
 
-    // Compute dynamic camera position offset
-    const desiredCameraPos = new Vector3(
-      targetPosition.x + this.baseOffset.x,
-      targetPosition.y + this.baseOffset.y,
-      targetPosition.z + this.baseOffset.z
-    );
-
-    // If swinging from Cinematic into Playing, perform a smooth blend transition
-    if (this.transitionAlpha < 1.0) {
-      this.transitionAlpha = Math.min(1.0, this.transitionAlpha + 1.8 * deltaTimeSeconds);
-      const easeAlpha = this.easeInOutCubic(this.transitionAlpha);
-
-      Vector3.LerpToRef(this.currentTarget, desiredTarget, easeAlpha, this.currentTarget);
-      Vector3.LerpToRef(this.camera.position, desiredCameraPos, easeAlpha, this.camera.position);
-    } else {
-      // Standard gameplay frame lerp
-      const lerpFactor = Math.min(1.0, 12.0 * deltaTimeSeconds);
-      Vector3.LerpToRef(this.currentTarget, desiredTarget, lerpFactor, this.currentTarget);
-      Vector3.LerpToRef(this.camera.position, desiredCameraPos, lerpFactor, this.camera.position);
-    }
-
-    this.camera.setTarget(this.currentTarget);
-
-    // 2. Smooth lateral banking (roll rotation) on turning
-    const targetRoll = -lateralIntent * 0.08; // Max ~4.5 degrees subtle banking
-    this.currentRoll += (targetRoll - this.currentRoll) * Math.min(1.0, 8.0 * deltaTimeSeconds);
-    this.camera.rotation.z = this.currentRoll;
-
-    // 3. Smooth FOV widen at high speed
-    const normalizedSpeed = Math.min(1.0, Math.max(0, (speed - 8.0) / 15.0));
-    const targetFov = this.baseFov + normalizedSpeed * 0.12;
-    this.camera.fov += (targetFov - this.camera.fov) * Math.min(1.0, 5.0 * deltaTimeSeconds);
+    this.applyPresentationState(cameraState, deltaTimeSeconds);
   }
 
   private updateCinematicOrbit(
     originPos: { x: number; y: number; z: number },
     deltaTimeSeconds: number
   ): void {
-    // Slow, relaxing orbital rotation around starting track area — pulled back
-    // and raised to an establishing angle so the title screen frames the valley
-    // (widened terrain + rising walls) instead of being filled by track/rail.
     this.idleAngle += 0.2 * deltaTimeSeconds;
 
-    // Orbit around a point well down-track (not the origin itself) so the
-    // circling camera stays pointed toward the opening-zone trees/landform
-    // cluster (~40-90m ahead) instead of the empty start of the path.
     const lookAnchor = new Vector3(originPos.x, originPos.y - 2.0, originPos.z + 55.0);
-
     const orbitRadius = 45.0;
     const camX = lookAnchor.x + Math.sin(this.idleAngle) * orbitRadius;
     const camY = originPos.y + 20.0 + Math.sin(this.idleAngle * 0.7) * 2.0;
@@ -126,14 +130,11 @@ export class GameplayCamera {
 
   public resetPosition(targetPosition: { x: number; y: number; z: number }): void {
     this.currentTarget.set(targetPosition.x, targetPosition.y, targetPosition.z);
-    this.camera.position.set(
-      targetPosition.x + this.baseOffset.x,
-      targetPosition.y + this.baseOffset.y,
-      targetPosition.z + this.baseOffset.z
-    );
+    this.cameraController.reset(targetPosition);
+    const state = this.cameraController.getState();
+    this.camera.position.set(state.position.x, state.position.y, state.position.z);
     this.camera.setTarget(this.currentTarget);
     this.camera.rotation.z = 0;
-    this.currentRoll = 0;
     this.camera.fov = this.baseFov;
   }
 
