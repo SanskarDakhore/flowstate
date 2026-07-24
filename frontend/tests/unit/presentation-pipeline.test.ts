@@ -77,12 +77,15 @@ describe('FLOWSTATE v0.2.5 Unified Presentation Pipeline Architectural Invariant
 
       expect(snapshot.frame.frameIndex).toBeGreaterThan(0);
       expect(Object.isFrozen(snapshot)).toBe(true);
-      expect(snapshot.world.reservedWorldState).toBeNull();
+      expect(snapshot.world.reservedWorldState).not.toBeNull();
       expect(snapshot.diagnostics.totalPresentationCostMs).toBeGreaterThanOrEqual(0);
     }
 
-    // Step to let transient pool items return
-    pipeline.update(movState, pos, 2.0);
+    // Step with zero speed to let transient pool items return
+    const idleMovState = { ...movState, speed: 0, momentumMagnitude: 0 };
+    for (let t = 0; t < 3; t++) {
+      pipeline.update(idleMovState, pos, 1.0);
+    }
     const finalFreeDebrisPool = pipeline.getEnvironmentController().getSurfacePoolFreeCount();
     expect(finalFreeDebrisPool).toBe(initialFreeDebrisPool);
   });

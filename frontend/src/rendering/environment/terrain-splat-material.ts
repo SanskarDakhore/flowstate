@@ -1,4 +1,5 @@
-import { Scene, ShaderMaterial, Texture, Vector3, Color3 } from '@babylonjs/core';
+import { Scene, ShaderMaterial, Texture, Vector3, Color3, Vector4 } from '@babylonjs/core';
+import { BiomeConfig } from './biome-config';
 
 const VERTEX_SOURCE = `
 precision highp float;
@@ -13,15 +14,23 @@ uniform mat4 world;
 uniform mat4 worldViewProjection;
 
 varying vec3 vWorldNormal;
+varying vec3 vWorldPosition;
 varying vec2 vUV;
 varying vec4 vVertexColor;
 varying float vGroundInjection;
+varying float vSlope;
 
 void main() {
+  vec4 wPos = world * vec4(position, 1.0);
+  vWorldPosition = wPos.xyz;
   vWorldNormal = normalize((world * vec4(normal, 0.0)).xyz);
   vUV = uv;
   vVertexColor = color;
   vGroundInjection = groundInjection;
+
+  // Slope factor: 0 = flat ground, 1 = vertical wall face
+  vSlope = 1.0 - clamp(dot(vWorldNormal, vec3(0.0, 1.0, 0.0)), 0.0, 1.0);
+
   gl_Position = worldViewProjection * vec4(position, 1.0);
 }
 `;
@@ -30,65 +39,100 @@ const FRAGMENT_SOURCE = `
 precision highp float;
 
 varying vec3 vWorldNormal;
+varying vec3 vWorldPosition;
 varying vec2 vUV;
 varying vec4 vVertexColor;
 varying float vGroundInjection;
+varying float vSlope;
 
-uniform sampler2D uMeadowTex;
-uniform sampler2D uEarthTex;
-uniform sampler2D uStoneTex;
+uniform sampler2D tBaseDiffuse;
+uniform sampler2D tPrimaryDiffuse;
+uniform sampler2D tAccentDiffuse;
+uniform sampler2D tSteepDiffuse;
+
+uniform vec4 uScales;
+uniform vec3 uMacroHighTint;
+uniform vec3 uMacroLowTint;
+uniform float uMacroScale;
+uniform float uSlopeThreshold;
+uniform float uSlopeTransition;
 
 uniform vec3 uLightDirection;
 uniform vec3 uLightColor;
 uniform vec3 uAmbientColor;
 
-// Cheap per-pixel hash for anti-tiling UV jitter (mirrors the CPU-side hash
-// noise already used in organic-noise.ts, kept consistent across the codebase).
+// Per-pixel 2D value noise for macro color variation & anti-tiling jitter
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
 }
 
+float perlinNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),
+    mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y
+  );
+}
+
+// Height-contrast blending between two texture samples
+vec4 heightBlend(vec4 col1, float h1, vec4 col2, float h2, float blendFactor) {
+  float heightContrast = 0.2;
+  float ma = max(h1 + (1.0 - blendFactor), h2 + blendFactor) - heightContrast;
+  float b1 = max(h1 + (1.0 - blendFactor) - ma, 0.0);
+  float b2 = max(h2 + blendFactor - ma, 0.0);
+  return (col1 * b1 + col2 * b2) / max(b1 + b2, 0.0001);
+}
+
 void main() {
   vec3 N = normalize(vWorldNormal);
+  vec2 uvBase = vWorldPosition.xz;
 
-  // Slope factor: 0 = flat ground, 1 = vertical wall face.
-  float slope = 1.0 - clamp(dot(N, vec3(0.0, 1.0, 0.0)), 0.0, 1.0);
-  float stoneMix = smoothstep(0.35, 0.65, slope);
-
-  // Anti-tiling: blend a detail-scale sample with a macro-scale sample
-  // offset by a low-frequency hash so the repeating grid doesn't line up
-  // across the terrain's 480-unit width.
+  // Anti-tiling jitter offset
   vec2 jitter = (vec2(hash(floor(vUV * 6.0)), hash(floor(vUV * 6.0) + 17.0)) - 0.5) * 0.12;
-  vec4 meadowDetail = texture2D(uMeadowTex, vUV * 18.0);
-  vec4 meadowMacro = texture2D(uMeadowTex, vUV * 3.0 + jitter);
-  vec4 meadow = mix(meadowDetail, meadowMacro, 0.5);
 
-  vec4 earth = texture2D(uEarthTex, vUV * 14.0 + jitter * 0.5);
-  vec4 stone = texture2D(uStoneTex, vUV * 10.0);
+  // 1. Base Layer (Dirt / Soil)
+  vec4 cBase = texture2D(tBaseDiffuse, vUV * uScales.x + jitter * 0.5);
+  float hBase = cBase.a > 0.01 ? cBase.a : cBase.r;
 
-  // vVertexColor.a carries the precise floor->rim rise curve computed in
-  // createValleyFloor() (Checkpoint A) - reused here as the meadow/earth
-  // macro-zone control instead of re-deriving it from world position.
+  // 2. Primary Layer (Meadow Grass)
+  vec4 cPrimaryDetail = texture2D(tPrimaryDiffuse, vUV * uScales.y);
+  vec4 cPrimaryMacro  = texture2D(tPrimaryDiffuse, vUV * (uScales.y * 0.2) + jitter);
+  vec4 cPrimary = mix(cPrimaryDetail, cPrimaryMacro, 0.4);
+  float hPrimary = cPrimary.a > 0.01 ? cPrimary.a : cPrimary.r;
+
+  // 3. Accent Layer (Moss / Damp Earth)
+  vec4 cAccent = texture2D(tAccentDiffuse, vUV * uScales.z + jitter * 0.3);
+  float hAccent = cAccent.a > 0.01 ? cAccent.a : cAccent.r;
+
+  // 4. Steep Layer (Crag Rock)
+  vec4 cSteep = texture2D(tSteepDiffuse, vUV * uScales.w);
+  float hSteep = cSteep.a > 0.01 ? cSteep.a : cSteep.r;
+
+  // Blend Primary (Grass) onto Base (Dirt) using riseCurve & groundInjection
   float riseCurve = vVertexColor.a;
-  // vGroundInjection (Checkpoint C): baked per-vertex by nearby rocks/trees at
-  // world-build time (see computeGroundInjectionPoints in
-  // living-valley-composition.ts) - locally overrides the meadow/earth split
-  // so exposed dirt reads under canopies and around rock fragments, at zero
-  // extra runtime cost (no per-pixel object lookups).
   float earthMix = max(smoothstep(0.15, 0.55, riseCurve), vGroundInjection);
-  vec4 groundBlend = mix(meadow, earth, earthMix);
-  vec3 albedo = mix(groundBlend.rgb, stone.rgb, stoneMix);
+  vec4 blendedGround = heightBlend(cPrimary, hPrimary, cBase, hBase, earthMix);
 
-  // Basic Lambertian lighting: this material bypasses Babylon's automatic
-  // light binding, so ambient + one directional term are computed manually
-  // to stay visually consistent with the rest of the (StandardMaterial-lit) scene.
+  // Accent blending (Moss/Damp Earth in mid-height micro-noise areas)
+  float accentWeight = smoothstep(0.3, 0.7, perlinNoise(uvBase * 0.08));
+  blendedGround = heightBlend(blendedGround, hPrimary, cAccent, hAccent, accentWeight * 0.4);
+
+  // Slope Blending for Cliffs (Steep Crag Rock)
+  float cliffFactor = smoothstep(uSlopeThreshold - uSlopeTransition, uSlopeThreshold + uSlopeTransition, vSlope);
+  vec4 finalAlbedo = heightBlend(blendedGround, 0.5, cSteep, hSteep, cliffFactor);
+
+  // Macro Color Variation across terrain expanse
+  float macroNoise = perlinNoise(uvBase * uMacroScale);
+  vec3 tint = mix(uMacroLowTint, uMacroHighTint, macroNoise);
+  finalAlbedo.rgb *= tint;
+
+  // Lighting computation (Lambertian key light + sky ambient)
   float ndotl = max(dot(N, normalize(-uLightDirection)), 0.0);
-  vec3 lit = albedo * (uAmbientColor + uLightColor * ndotl);
+  vec3 lit = finalAlbedo.rgb * (uAmbientColor + uLightColor * ndotl);
 
-  // Checkpoint A boundary concealment: only the outermost rim fades toward
-  // vVertexColor.rgb (which is itself the sage->bluff->fog gradient), so
-  // textures stay fully readable near the track and dissolve into the same
-  // atmospheric haze color at the world's edge as before.
+  // Atmospheric horizon rim fade (Checkpoint A boundary concealment)
   float rimFade = smoothstep(0.55, 1.0, riseCurve);
   lit = mix(lit, vVertexColor.rgb, rimFade);
 
@@ -102,12 +146,89 @@ export interface TerrainSplatTextures {
   stoneAlbedo: string;
 }
 
+export class TerrainSplatMaterial extends ShaderMaterial {
+  constructor(
+    name: string,
+    scene: Scene,
+    config: BiomeConfig,
+    lightDirection: Vector3 = new Vector3(-0.6, -0.35, 0.7),
+    lightColor: Color3 = new Color3(1.0, 0.85, 0.65),
+    ambientColor: Color3 = new Color3(0.3, 0.35, 0.4)
+  ) {
+    super(
+      name,
+      scene,
+      { vertexSource: VERTEX_SOURCE, fragmentSource: FRAGMENT_SOURCE },
+      {
+        attributes: ['position', 'normal', 'uv', 'color', 'groundInjection'],
+        uniforms: [
+          'world',
+          'worldViewProjection',
+          'uScales',
+          'uMacroHighTint',
+          'uMacroLowTint',
+          'uMacroScale',
+          'uSlopeThreshold',
+          'uSlopeTransition',
+          'uLightDirection',
+          'uLightColor',
+          'uAmbientColor',
+        ],
+        samplers: ['tBaseDiffuse', 'tPrimaryDiffuse', 'tAccentDiffuse', 'tSteepDiffuse'],
+      }
+    );
+
+    this.applyBiomeConfig(config, lightDirection, lightColor, ambientColor);
+  }
+
+  public applyBiomeConfig(
+    config: BiomeConfig,
+    lightDirection: Vector3 = new Vector3(-0.6, -0.35, 0.7),
+    lightColor: Color3 = new Color3(1.0, 0.85, 0.65),
+    ambientColor: Color3 = new Color3(0.3, 0.35, 0.4)
+  ): void {
+    const scene = this.getScene();
+
+    const baseTex = new Texture(config.layers.base.diffuseMap, scene);
+    const primaryTex = new Texture(config.layers.primary.diffuseMap, scene);
+    const accentTex = new Texture(config.layers.accent.diffuseMap, scene);
+    const steepTex = new Texture(config.layers.steep.diffuseMap, scene);
+
+    baseTex.uScale = baseTex.vScale = 1;
+    primaryTex.uScale = primaryTex.vScale = 1;
+    accentTex.uScale = accentTex.vScale = 1;
+    steepTex.uScale = steepTex.vScale = 1;
+
+    this.setTexture('tBaseDiffuse', baseTex);
+    this.setTexture('tPrimaryDiffuse', primaryTex);
+    this.setTexture('tAccentDiffuse', accentTex);
+    this.setTexture('tSteepDiffuse', steepTex);
+
+    this.setVector4(
+      'uScales',
+      new Vector4(
+        config.layers.base.scale,
+        config.layers.primary.scale,
+        config.layers.accent.scale,
+        config.layers.steep.scale
+      )
+    );
+
+    this.setColor3('uMacroHighTint', config.macroColor.highTint);
+    this.setColor3('uMacroLowTint', config.macroColor.lowTint);
+    this.setFloat('uMacroScale', config.macroColor.noiseScale);
+    this.setFloat('uSlopeThreshold', config.splatThresholds.slopeThreshold);
+    this.setFloat('uSlopeTransition', config.splatThresholds.slopeTransition);
+
+    this.setVector3('uLightDirection', lightDirection);
+    this.setColor3('uLightColor', lightColor);
+    this.setColor3('uAmbientColor', ambientColor);
+    this.backFaceCulling = true;
+  }
+}
+
 /**
- * Custom ground-splat ShaderMaterial: blends meadow/earth/stone CC0 albedo
- * textures using the terrain's own vertex color (Checkpoint A's rise-curve
- * and rim-fade data) plus a slope-driven stone override for steep faces.
- * Bypasses Babylon's StandardMaterial entirely, so lighting is replicated
- * manually (single directional term + ambient) to match the rest of the scene.
+ * Factory helper maintaining backward compatibility for existing callers.
  */
 export function createTerrainSplatMaterial(
   name: string,
@@ -117,31 +238,24 @@ export function createTerrainSplatMaterial(
   lightColor: Color3,
   ambientColor: Color3
 ): ShaderMaterial {
-  const material = new ShaderMaterial(
-    name,
-    scene,
-    { vertexSource: VERTEX_SOURCE, fragmentSource: FRAGMENT_SOURCE },
-    {
-      attributes: ['position', 'normal', 'uv', 'color', 'groundInjection'],
-      uniforms: ['world', 'worldViewProjection', 'uLightDirection', 'uLightColor', 'uAmbientColor'],
-      samplers: ['uMeadowTex', 'uEarthTex', 'uStoneTex'],
-    }
-  );
+  // Construct a default BiomeConfig using the provided texture paths
+  const config: BiomeConfig = {
+    id: 'legacy_terrain',
+    name: 'Legacy Terrain',
+    layers: {
+      base: { id: 'earth', diffuseMap: textures.earthAlbedo, scale: 14.0 },
+      primary: { id: 'meadow', diffuseMap: textures.meadowAlbedo, scale: 18.0 },
+      accent: { id: 'moss', diffuseMap: textures.earthAlbedo, scale: 12.0 },
+      steep: { id: 'stone', diffuseMap: textures.stoneAlbedo, scale: 10.0 },
+    },
+    elevation: { heightScale: 25, noiseScale: 0.05, valleyDepth: -22, riverbedWidth: 40 },
+    macroColor: {
+      highTint: new Color3(1.0, 1.0, 1.0),
+      lowTint: new Color3(0.85, 0.85, 0.85),
+      noiseScale: 0.005,
+    },
+    splatThresholds: { slopeThreshold: 0.5, slopeTransition: 0.15, heightThreshold: 15.0 },
+  };
 
-  const meadowTex = new Texture(textures.meadowAlbedo, scene);
-  const earthTex = new Texture(textures.earthAlbedo, scene);
-  const stoneTex = new Texture(textures.stoneAlbedo, scene);
-  meadowTex.uScale = meadowTex.vScale = 1;
-  earthTex.uScale = earthTex.vScale = 1;
-  stoneTex.uScale = stoneTex.vScale = 1;
-
-  material.setTexture('uMeadowTex', meadowTex);
-  material.setTexture('uEarthTex', earthTex);
-  material.setTexture('uStoneTex', stoneTex);
-  material.setVector3('uLightDirection', lightDirection);
-  material.setColor3('uLightColor', lightColor);
-  material.setColor3('uAmbientColor', ambientColor);
-  material.backFaceCulling = true;
-
-  return material;
+  return new TerrainSplatMaterial(name, scene, config, lightDirection, lightColor, ambientColor);
 }

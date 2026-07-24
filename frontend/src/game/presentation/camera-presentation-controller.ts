@@ -5,6 +5,25 @@ import {
   CameraPresentationState,
 } from './presentation-profile';
 
+export interface CameraOffsetPreset {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly fovOffset: number;
+}
+
+export const CAMERA_ANGLE_PRESETS: Record<CameraMode, CameraOffsetPreset> = {
+  Playing: { x: 0, y: 3.8, z: -8.5, fovOffset: 0.0 },
+  LowAngleChase: { x: 0, y: 1.2, z: -6.0, fovOffset: 0.15 },
+  DynamicOrbit: { x: 0, y: 4.5, z: -9.0, fovOffset: 0.05 },
+  CloseAction: { x: 0, y: 2.0, z: -4.0, fovOffset: -0.1 },
+  BirdsEye: { x: 0, y: 22.0, z: -3.0, fovOffset: 0.2 },
+  Idle: { x: 0, y: 3.8, z: -8.5, fovOffset: 0.0 },
+  Landing: { x: 0, y: 3.0, z: -7.5, fovOffset: 0.0 },
+  Airborne: { x: 0, y: 5.0, z: -10.0, fovOffset: 0.05 },
+  Transition: { x: 0, y: 3.8, z: -8.5, fovOffset: 0.0 },
+};
+
 export class CameraPresentationController {
   private profile: CameraBehaviorProfile;
 
@@ -14,7 +33,8 @@ export class CameraPresentationController {
   private desiredTarget = { x: 0, y: 1.0, z: 5.0 };
   private desiredCamPos = { x: 0, y: 5.0, z: -10.0 };
 
-  private baseOffset = { x: 0, y: 3.8, z: -8.5 };
+  private activeOffset = { x: 0, y: 3.8, z: -8.5 };
+  private orbitAngle: number = 0;
 
   // Smooth State Counters
   private currentLandingOffset: number = 0;
@@ -36,6 +56,10 @@ export class CameraPresentationController {
 
   public setMode(mode: CameraMode): void {
     this.activeMode = mode;
+  }
+
+  public getMode(): CameraMode {
+    return this.activeMode;
   }
 
   public triggerLandingCushion(impactVelocity: number): void {
@@ -64,7 +88,26 @@ export class CameraPresentationController {
       this.currentLandingOffset = 0;
     }
 
-    // 2. Compute Target Look-Ahead Vector
+    // 2. Select Active Camera Preset & Smooth Blend Offset
+    const preset = CAMERA_ANGLE_PRESETS[this.activeMode] ?? CAMERA_ANGLE_PRESETS.Playing;
+    let targetOffsetX = preset.x;
+    let targetOffsetY = preset.y;
+    let targetOffsetZ = preset.z;
+
+    // Special handling for DYNAMIC_ORBIT mode (360 deg orbital rotation around player)
+    if (this.activeMode === 'DynamicOrbit') {
+      this.orbitAngle += clampedDt * 0.8;
+      const radius = 9.0;
+      targetOffsetX = Math.sin(this.orbitAngle) * radius;
+      targetOffsetZ = -Math.cos(this.orbitAngle) * radius;
+    }
+
+    // Blend active offset vector smoothly
+    this.activeOffset.x += (targetOffsetX - this.activeOffset.x) * decayFactor;
+    this.activeOffset.y += (targetOffsetY - this.activeOffset.y) * decayFactor;
+    this.activeOffset.z += (targetOffsetZ - this.activeOffset.z) * decayFactor;
+
+    // 3. Compute Target Look-Ahead Vector
     const maxDist = this.profile.lookAhead.maxDistance;
     const lookAheadScalar = Math.min(maxDist, intent.speed * this.profile.lookAhead.lookAheadFactor);
 
@@ -90,11 +133,11 @@ export class CameraPresentationController {
     this.desiredTarget.z = intent.targetPosition.z + facingZ * lookAheadScalar;
 
     // Ideal camera position offset
-    this.desiredCamPos.x = intent.targetPosition.x + this.baseOffset.x;
-    this.desiredCamPos.y = intent.targetPosition.y + this.baseOffset.y - this.currentLandingOffset;
-    this.desiredCamPos.z = intent.targetPosition.z + this.baseOffset.z;
+    this.desiredCamPos.x = intent.targetPosition.x + this.activeOffset.x;
+    this.desiredCamPos.y = intent.targetPosition.y + this.activeOffset.y - this.currentLandingOffset;
+    this.desiredCamPos.z = intent.targetPosition.z + this.activeOffset.z;
 
-    // 3. Analytical Exponential Decay Filtering
+    // 4. Analytical Exponential Decay Filtering
     const prevPosX = this.curPos.x;
     const prevPosY = this.curPos.y;
     const prevPosZ = this.curPos.z;
@@ -107,7 +150,7 @@ export class CameraPresentationController {
     this.curPos.y += (this.desiredCamPos.y - this.curPos.y) * decayFactor;
     this.curPos.z += (this.desiredCamPos.z - this.curPos.z) * decayFactor;
 
-    // 4. Calculate Diagnostic Telemetry (Camera Error & Tracking Speed)
+    // 5. Diagnostic Telemetry
     const dxErr = this.desiredTarget.x - this.curLookTarget.x;
     const dyErr = this.desiredTarget.y - this.curLookTarget.y;
     const dzErr = this.desiredTarget.z - this.curLookTarget.z;
@@ -118,10 +161,14 @@ export class CameraPresentationController {
     const moveDz = this.curPos.z - prevPosZ;
     this.actualFollowSpeed = Math.sqrt(moveDx * moveDx + moveDy * moveDy + moveDz * moveDz) / clampedDt;
 
-    // 5. Conservative FOV Expansion
+    // 6. Dynamic FOV Scaling Expansion
     const maxSpeed = 20.0;
     const normalizedSpeed = Math.min(1.0, intent.speed / maxSpeed);
-    const targetFov = this.profile.fov.baseFov + normalizedSpeed * this.profile.fov.maxFovSpeedExpansion;
+    const targetFov =
+      this.profile.fov.baseFov +
+      preset.fovOffset +
+      normalizedSpeed * this.profile.fov.maxFovSpeedExpansion;
+
     this.currentFov += (targetFov - this.currentFov) * decayFactor;
 
     return this.getState();
@@ -144,9 +191,9 @@ export class CameraPresentationController {
   public reset(position: { x: number; y: number; z: number }): void {
     this.curLookTarget = { ...position };
     this.curPos = {
-      x: position.x + this.baseOffset.x,
-      y: position.y + this.baseOffset.y,
-      z: position.z + this.baseOffset.z,
+      x: position.x + this.activeOffset.x,
+      y: position.y + this.activeOffset.y,
+      z: position.z + this.activeOffset.z,
     };
     this.currentLandingOffset = 0;
     this.landingRecoveryTimerMs = 0;

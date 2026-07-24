@@ -5,6 +5,9 @@ import { MovementIntent, createEmptyIntent, clampIntentValue } from '../movement
 type CommandListener = (command: NormalizedGameCommand) => void;
 type IntentListener = (intent: MovementIntent) => void;
 
+type Mutable<T> = { -readonly [P in keyof T]: T[P] };
+type MutableMovementIntent = Mutable<Required<MovementIntent>>;
+
 export class InputRouter {
   private recognizer = new GestureRecognizer();
   private commandListeners: CommandListener[] = [];
@@ -13,7 +16,7 @@ export class InputRouter {
   private isDragging: boolean = false;
   private dragStartX: number = 0;
   private dragStartY: number = 0;
-  private currentIntent: MovementIntent = createEmptyIntent();
+  private currentIntent: MutableMovementIntent = createEmptyIntent() as MutableMovementIntent;
   private pendingJumpTrigger: boolean = false;
 
   private keyStates: Map<string, boolean> = new Map();

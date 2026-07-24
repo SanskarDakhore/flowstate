@@ -1,4 +1,4 @@
-import { Vector3State, PlayerState } from '../../game/movement/movement-types';
+import { PlayerState } from '../../game/movement/movement-types';
 import { MovementMetricsSummary } from '../../game/prototype/prototype-metrics';
 
 export interface PlayerHudData {
@@ -39,197 +39,44 @@ export class PlayerHud {
     const existingScrimBottom = document.getElementById('flow-scrim-bottom');
     if (existingScrimBottom) existingScrimBottom.remove();
 
-    // 1. Top Scrim Vignette Overlay (Non-intrusive gradient backdrop)
     this.scrimTop = document.createElement('div');
     this.scrimTop.id = 'flow-scrim-top';
-    Object.assign(this.scrimTop.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: '100%',
-      height: '140px',
-      background: 'linear-gradient(180deg, rgba(5, 8, 16, 0.75) 0%, rgba(5, 8, 16, 0.3) 60%, rgba(5, 8, 16, 0) 100%)',
-      pointerEvents: 'none',
-      zIndex: '900',
-    });
+    this.scrimTop.className = 'flow-scrim flow-scrim--top';
     document.body.appendChild(this.scrimTop);
 
-    // 2. Bottom Scrim Overlay
     this.scrimBottom = document.createElement('div');
     this.scrimBottom.id = 'flow-scrim-bottom';
-    Object.assign(this.scrimBottom.style, {
-      position: 'fixed',
-      bottom: '0',
-      left: '0',
-      width: '100%',
-      height: '120px',
-      background: 'linear-gradient(0deg, rgba(5, 8, 16, 0.75) 0%, rgba(5, 8, 16, 0.3) 60%, rgba(5, 8, 16, 0) 100%)',
-      pointerEvents: 'none',
-      zIndex: '900',
-    });
+    this.scrimBottom.className = 'flow-scrim flow-scrim--bottom';
     document.body.appendChild(this.scrimBottom);
 
-    // 3. HUD Root Container (Zero-surface floating spatial canvas)
     this.container = document.createElement('div');
     this.container.id = 'flow-hud-root';
-    Object.assign(this.container.style, {
-      position: 'fixed',
-      top: '0',
-      left: '0',
-      width: '100%',
-      height: '100%',
-      pointerEvents: 'none',
-      zIndex: '950',
-      fontFamily: 'var(--flow-font-body)',
-      boxSizing: 'border-box',
-    });
+    this.container.className = 'flow-hud-root';
 
     this.container.innerHTML = `
-      <!-- Top-Left: Identity Anchor (No Card, Vertical Cyan Light Thread) -->
-      <div style="
-        position: absolute;
-        top: var(--flow-safe-top);
-        left: var(--flow-safe-left);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        user-select: none;
-      ">
-        <div style="
-          width: var(--flow-stroke-spectral);
-          height: 24px;
-          background: linear-gradient(180deg, var(--flow-cyan-kinetic), var(--flow-cyan-velocity));
-          box-shadow: var(--flow-glow-cyan);
-          border-radius: 1px;
-        "></div>
-        <div style="display: flex; flex-direction: column; gap: 1px;">
-          <div style="
-            font-family: var(--flow-font-display);
-            font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 0.25em;
-            color: var(--flow-text-primary);
-            text-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
-            text-transform: uppercase;
-          ">FLOWSTATE</div>
-          <div style="
-            font-family: var(--flow-font-mono);
-            font-size: 9px;
-            font-weight: 500;
-            letter-spacing: 0.15em;
-            color: var(--flow-cyan-kinetic);
-            opacity: 0.85;
-          ">MOVEMENT LAB &middot; 01</div>
+      <div class="flow-hud-brand" aria-label="Flowstate movement lab">
+        <div class="flow-hud-brand__thread" aria-hidden="true"></div>
+        <div>
+          <div class="flow-hud-brand__name">FLOWSTATE</div>
+          <div class="flow-hud-brand__meta">MOVEMENT LAB &middot; 01</div>
         </div>
       </div>
 
-      <!-- Top-Center: Flow Objective Anchor (Parabolic Vector Arc Progress) -->
-      <div style="
-        position: absolute;
-        top: var(--flow-safe-top);
-        left: 50%;
-        transform: translateX(-50%);
-        width: min(320px, calc(100vw - 120px));
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 6px;
-        user-select: none;
-      ">
-        <!-- Telemetry Data Line: Title | Counter | Clock -->
-        <div style="
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 10px;
-          letter-spacing: 0.15em;
-        ">
-          <span style="
-            font-family: var(--flow-font-body);
-            font-weight: 600;
-            color: var(--flow-text-muted);
-            text-transform: uppercase;
-          ">CALIBRATION</span>
-
-          <span id="flow-target-count" style="
-            font-family: var(--flow-font-mono);
-            font-weight: 700;
-            color: var(--flow-cyan-kinetic);
-            text-shadow: var(--flow-glow-cyan);
-          ">0 / 30</span>
-
-          <span id="flow-timer" style="
-            font-family: var(--flow-font-mono);
-            font-weight: 500;
-            color: var(--flow-text-muted);
-          ">60s</span>
+      <div class="flow-objective">
+        <div class="flow-objective__line">
+          <span>Calibration</span>
+          <span id="flow-target-count" class="flow-objective__count">0 / 30</span>
+          <span id="flow-timer">60s</span>
         </div>
-
-        <!-- Parabolic Spectral Thread (Kinetic Progress Line) -->
-        <div style="
-          width: 100%;
-          height: 2px;
-          background: var(--flow-text-ghost);
-          border-radius: 1px;
-          overflow: hidden;
-          position: relative;
-        ">
-          <div id="flow-progress-fill" style="
-            width: 0%;
-            height: 100%;
-            background: linear-gradient(90deg, var(--flow-cyan-velocity), var(--flow-cyan-kinetic), var(--flow-solar-champagne));
-            box-shadow: var(--flow-glow-cyan);
-            transition: var(--flow-transition-normal);
-          "></div>
+        <div class="flow-objective__track" aria-hidden="true">
+          <div id="flow-progress-fill" class="flow-objective__fill"></div>
         </div>
       </div>
 
-      <!-- Bottom-Center: Contextual Interaction Echo (Luminous Orbital Charge Nodes) -->
-      <div id="flow-input-hint" style="
-        position: absolute;
-        bottom: calc(var(--flow-safe-bottom) + 12px);
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        user-select: none;
-        transition: var(--flow-transition-normal);
-        opacity: 0.9;
-      ">
-        <!-- Orbital Node Left -->
-        <span id="flow-node-left" style="
-          display: inline-block;
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: var(--flow-cyan-kinetic);
-          box-shadow: var(--flow-glow-cyan);
-          transition: var(--flow-transition-fast);
-        "></span>
-
-        <!-- Floating Text -->
-        <span id="flow-hint-text" style="
-          font-family: var(--flow-font-display);
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.2em;
-          color: var(--flow-text-primary);
-          text-shadow: 0 0 8px rgba(248, 250, 252, 0.3);
-          text-transform: uppercase;
-        ">TAP / SPACE TO JUMP</span>
-
-        <!-- Orbital Node Right -->
-        <span id="flow-node-right" style="
-          display: inline-block;
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: var(--flow-cyan-kinetic);
-          box-shadow: var(--flow-glow-cyan);
-          transition: var(--flow-transition-fast);
-        "></span>
+      <div id="flow-input-hint" class="flow-input-hint">
+        <span id="flow-node-left" class="flow-input-hint__node" aria-hidden="true"></span>
+        <span id="flow-hint-text" class="flow-input-hint__text">Tap / Space to Jump</span>
+        <span id="flow-node-right" class="flow-input-hint__node" aria-hidden="true"></span>
       </div>
     `;
 
@@ -286,12 +133,12 @@ export class PlayerHud {
       const airborne = playerState ? !playerState.isGrounded : false;
 
       if (jumpsUsed === 0 && !airborne) {
-        this.hintTextEl.textContent = 'TAP / SPACE TO JUMP';
+        this.hintTextEl.textContent = 'Tap / Space to Jump';
         this.setNodeState(this.chargeNodeLeft, true, false);
         this.setNodeState(this.chargeNodeRight, true, false);
         this.inputHintEl.style.opacity = '0.9';
       } else if (jumpsUsed === 1 && jumpsUsed < maxJumps) {
-        this.hintTextEl.textContent = 'TAP AGAIN TO DOUBLE JUMP';
+        this.hintTextEl.textContent = 'Tap Again to Double Jump';
         this.setNodeState(this.chargeNodeLeft, false, true); // First jump spent
         this.setNodeState(this.chargeNodeRight, true, false); // Second charge ready
         this.inputHintEl.style.opacity = '1.0';

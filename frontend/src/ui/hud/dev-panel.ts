@@ -42,20 +42,16 @@ export class DevPanel {
 
     this.container = document.createElement('div');
     this.container.id = 'flow-dev-panel-root';
-    Object.assign(this.container.style, {
-      position: 'fixed',
-      top: 'var(--flow-safe-top)',
-      right: 'var(--flow-safe-right)',
-      zIndex: '1000',
-      fontFamily: 'var(--flow-font-mono)',
-      fontSize: '11px',
-      color: 'var(--flow-text-primary)',
-      boxSizing: 'border-box',
-    });
+    this.container.className = 'flow-dev-root';
 
     // Top Right Micro Glyph Toggle (Quiet & Secondary)
     this.toggleBtn = document.createElement('button');
     this.toggleBtn.id = 'flow-dev-toggle';
+    this.toggleBtn.className = 'flow-dev-toggle';
+    this.toggleBtn.type = 'button';
+    this.toggleBtn.title = 'Toggle telemetry';
+    this.toggleBtn.setAttribute('aria-expanded', 'false');
+    this.toggleBtn.setAttribute('aria-controls', 'flow-dev-drawer');
     this.toggleBtn.innerHTML = `
       <span style="
         display: inline-block;
@@ -66,6 +62,10 @@ export class DevPanel {
         opacity: 0.8;
       "></span>
       <span>⚙ TEL</span>
+    `;
+    this.toggleBtn.innerHTML = `
+      <span class="flow-dev-toggle__dot" aria-hidden="true"></span>
+      <span>TEL</span>
     `;
     Object.assign(this.toggleBtn.style, {
       display: 'flex',
@@ -88,26 +88,12 @@ export class DevPanel {
       outline: 'none',
       userSelect: 'none',
     });
-
-    // Hover effect on toggle button
-    this.toggleBtn.addEventListener('mouseenter', () => {
-      if (this.toggleBtn) {
-        this.toggleBtn.style.opacity = '1.0';
-        this.toggleBtn.style.borderColor = 'var(--flow-cyan-kinetic)';
-        this.toggleBtn.style.color = 'var(--flow-text-primary)';
-      }
-    });
-    this.toggleBtn.addEventListener('mouseleave', () => {
-      if (this.toggleBtn && !this.isExpanded) {
-        this.toggleBtn.style.opacity = '0.35';
-        this.toggleBtn.style.borderColor = 'var(--flow-text-ghost)';
-        this.toggleBtn.style.color = 'var(--flow-text-muted)';
-      }
-    });
+    this.toggleBtn.removeAttribute('style');
 
     // Collapsible Glass Drawer Panel with dark background scrim for text readability
     this.drawer = document.createElement('div');
     this.drawer.id = 'flow-dev-drawer';
+    this.drawer.className = 'flow-dev-drawer';
     Object.assign(this.drawer.style, {
       position: 'absolute',
       top: '32px',
@@ -126,6 +112,7 @@ export class DevPanel {
       pointerEvents: 'auto',
       boxSizing: 'border-box',
     });
+    this.drawer.removeAttribute('style');
 
     this.container.appendChild(this.toggleBtn);
     this.container.appendChild(this.drawer);
@@ -151,12 +138,11 @@ export class DevPanel {
   public togglePanel(): void {
     this.isExpanded = !this.isExpanded;
     if (this.drawer) {
-      this.drawer.style.display = this.isExpanded ? 'flex' : 'none';
+      this.drawer.classList.toggle('is-expanded', this.isExpanded);
     }
     if (this.toggleBtn) {
-      this.toggleBtn.style.opacity = this.isExpanded ? '1.0' : '0.35';
-      this.toggleBtn.style.borderColor = this.isExpanded ? 'var(--flow-cyan-kinetic)' : 'var(--flow-text-ghost)';
-      this.toggleBtn.style.color = this.isExpanded ? 'var(--flow-cyan-kinetic)' : 'var(--flow-text-muted)';
+      this.toggleBtn.classList.toggle('is-expanded', this.isExpanded);
+      this.toggleBtn.setAttribute('aria-expanded', this.isExpanded ? 'true' : 'false');
     }
   }
 
@@ -293,20 +279,6 @@ export class DevPanel {
         <div><strong>CPU Cycle:</strong> ${frameTimeDelta}ms (Peak: ${peakFrameTime}ms)</div>
       </div>
 
-      <!-- Timers & Window Status -->
-      <div style="font-size: 9px; color: var(--flow-text-muted); background: var(--flow-bg-scrim); padding: 4px 6px; border-radius: 3px;">
-        <div><strong>Coyote Window:</strong> ${coyoteT}s | <strong>Jump Buffer:</strong> ${bufferT}s</div>
-      </div>
-
-      <!-- Input Intent -->
-      <div style="font-size: 9px; color: var(--flow-text-muted);">
-        <strong>Input Intent:</strong> Mag:${intent.movementMagnitude.toFixed(2)} | Dir:(${intent.desiredDirection?.x.toFixed(2)},${intent.desiredDirection?.z.toFixed(2)}) | Jump:${intent.jumpPressed ? '1' : '0'}
-      </div>
-
-      <!-- Metrics Summary -->
-      <div style="border-top: var(--flow-stroke-spectral) solid var(--flow-text-ghost); padding-top: 4px; display: flex; flex-direction: column; gap: 2px; font-size: 9px;">
-        <div style="font-weight: 600; color: var(--flow-solar-champagne);">VALIDATION</div>
-        <div>Passed: <strong style="color: var(--flow-status-success);">${metrics.targetsPassed}</strong> | Missed: <strong style="color: var(--flow-status-danger);">${metrics.targetsMissed}</strong></div>
       </div>
 
       <!-- Shortcut Hint -->

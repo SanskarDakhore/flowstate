@@ -1,0 +1,41 @@
+---
+Title: "FLOWSTATE GDOS — Dependency Graph"
+Module: "00_PROJECT_CORE"
+Status: Active
+Priority: High
+Milestone: 1
+Phase: "00.01"
+Spec Version: 1.0.0
+---
+
+# FLOWSTATE GDOS — Dependency Graph
+
+| Module | Dependencies | Provides | Blocks |
+|---|---|---|---|
+| **00_PROJECT_CORE** | None | Architectural Rules, Do-Not-Break Boundaries | All Modules |
+| **01_GAMEPLAY** | 02_PHYSICS, 07_PLAYER_SPHERE | Core Loop, Controls, Scoring | 09_PROGRESSION, 10_PERKS, 14_BALANCE |
+| **02_PHYSICS** | 15_TECHNICAL_ENGINE | Kinetics, Surface Friction, Collisions | 01_GAMEPLAY, 08_TRACK_SYSTEM |
+| **03_LEVEL_DESIGN** | 08_TRACK_SYSTEM, 02_PHYSICS | Track Generation, Level Seeds | 04_LIVING_WORLD_SIMULATION |
+| **04_LIVING_WORLD_SIMULATION** | 01_GAMEPLAY | Resonance Eco-System, Weather Cycles | 05_ENVIRONMENT_RENDERING |
+| **05_ENVIRONMENT_RENDERING** | 04_LIVING_WORLD_SIMULATION, 16_SHADER_SYSTEM | GPU Instancing, Terrain Splatting | 06_ART_DIRECTION, 18_OPTIMIZATION_LOD |
+| **06_ART_DIRECTION** | None | Color Language, Visual Aesthetics | 05_ENVIRONMENT_RENDERING, 13_UI_UX |
+| **07_PLAYER_SPHERE** | 02_PHYSICS, 06_ART_DIRECTION | Sphere Mesh, Trails, Skins | 01_GAMEPLAY, 11_COSMETICS_ECONOMY |
+| **08_TRACK_SYSTEM** | 02_PHYSICS | Ribbon Architecture, Curvature Splines | 03_LEVEL_DESIGN |
+| **09_PROGRESSION** | 01_GAMEPLAY | XP, Player Levels, Achievements | 10_PERKS, 11_COSMETICS_ECONOMY |
+| **10_PERKS** | 09_PROGRESSION, 01_GAMEPLAY | Passive/Active Perks, Skill Trees | 14_BALANCE |
+| **11_COSMETICS_ECONOMY** | 07_PLAYER_SPHERE, 09_PROGRESSION | Sphere Skins, Visual Themes | 23_MONETIZATION |
+| **12_AUDIO_ENGINE** | 01_GAMEPLAY, 04_LIVING_WORLD_SIMULATION | Dynamic Stem Audio, Haptics | 13_UI_UX |
+| **13_UI_UX** | 00_PROJECT_CORE, 06_ART_DIRECTION | HUD Scrims, DevPanel Telemetry | 01_GAMEPLAY |
+| **14_BALANCE** | 01_GAMEPLAY, 09_PROGRESSION, 10_PERKS | Score Formulas, Difficulty Curves | 25_PRODUCTION_MANAGEMENT |
+| **15_TECHNICAL_ENGINE** | None | Core Loop, Memory Pooling, Input Router | 02_PHYSICS, 16_SHADER_SYSTEM |
+| **16_SHADER_SYSTEM** | 15_TECHNICAL_ENGINE | GLSL/HLSL Materials, Post-FX | 05_ENVIRONMENT_RENDERING |
+| **17_ASSET_PIPELINE** | None | Asset Standards, Texture Streaming | 05_ENVIRONMENT_RENDERING, 18_OPTIMIZATION_LOD |
+| **18_OPTIMIZATION_LOD** | 15_TECHNICAL_ENGINE, 16_SHADER_SYSTEM | Instancing, VRAM Budgets | 26_RELEASE_LIVEOPS |
+| **19_SOCIAL_MULTIPLAYER** | 20_BACKEND_INFRASTRUCTURE | Leaderboards, Ghost Replays | 21_SAVE_CLOUD_SYSTEM |
+| **20_BACKEND_INFRASTRUCTURE** | None | REST/WS APIs, Auth, Database | 19_SOCIAL_MULTIPLAYER, 21_SAVE_CLOUD_SYSTEM |
+| **21_SAVE_CLOUD_SYSTEM** | 20_BACKEND_INFRASTRUCTURE | State Serialization, Cloud Sync | 09_PROGRESSION |
+| **22_ANALYTICS_TELEMETRY** | 20_BACKEND_INFRASTRUCTURE | Performance Logging, Crash Reports | 25_PRODUCTION_MANAGEMENT |
+| **23_MONETIZATION** | 11_COSMETICS_ECONOMY, 20_BACKEND_INFRASTRUCTURE | Cosmetic Store, IAP Validation | 26_RELEASE_LIVEOPS |
+| **24_TESTING_QA** | 00_PROJECT_CORE | Unit Tests, Physics Determinism | 25_PRODUCTION_MANAGEMENT |
+| **25_PRODUCTION_MANAGEMENT** | 00_PROJECT_CORE | Roadmap, Risk Register, Debt | 26_RELEASE_LIVEOPS |
+| **26_RELEASE_LIVEOPS** | 25_PRODUCTION_MANAGEMENT | CI/CD, App Store / Play Store | Post-Launch LiveOps |

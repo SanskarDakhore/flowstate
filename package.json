@@ -15,7 +15,7 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
-    "validate": "node scripts/validation/check_structure.js"
+    "validate": "node scripts/validation/check_structure.js && node scripts/validate-gdos.js"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

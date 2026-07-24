@@ -1,6 +1,8 @@
 import { MovementModelId, PlayerState } from '../movement/movement-types';
 import { MovementIntent } from '../movement/movement-intent';
 import { InteractionEvent } from './prototype-interaction-system';
+import { FlowSignalController } from '../signals/flow-signal-controller';
+import { GameplaySignalSnapshot } from '@flowstate/shared';
 
 export interface MovementMetricsSummary {
   movementModel: MovementModelId;
@@ -31,6 +33,11 @@ export class PrototypeMetrics {
   private boundaryContacts: number = 0;
 
   private sessionDuration: number = 0;
+  private signalController = new FlowSignalController();
+
+  public getSignalController(): FlowSignalController {
+    return this.signalController;
+  }
 
   public setModel(modelId: MovementModelId): void {
     this.activeModel = modelId;
@@ -44,6 +51,15 @@ export class PrototypeMetrics {
   ): void {
     if (deltaTime <= 0) return;
 
+    this.signalController.update(
+      playerState.speed,
+      30,
+      pathDeviation,
+      this.targetsPassed,
+      playerState.isGrounded ?? true,
+      deltaTime
+    );
+
     this.sessionDuration += deltaTime;
     this.totalSamples++;
     this.speedSum += playerState.speed;
@@ -51,10 +67,12 @@ export class PrototypeMetrics {
       this.maxSpeed = playerState.speed;
     }
 
-    const inputMag = Math.sqrt(intent.horizontal * intent.horizontal + intent.vertical * intent.vertical);
+    const h = intent.horizontal ?? 0;
+    const v = intent.vertical ?? 0;
+    const inputMag = Math.sqrt(h * h + v * v);
     this.totalInputMagnitude += inputMag * deltaTime;
 
-    const currentSignX = Math.sign(intent.horizontal);
+    const currentSignX = Math.sign(h);
     if (currentSignX !== 0 && this.lastInputSignX !== 0 && currentSignX !== this.lastInputSignX) {
       this.directionChanges++;
     }

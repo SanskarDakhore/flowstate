@@ -5,6 +5,7 @@ import { RibbonPathView } from './ribbon-path-view';
 import { WorldEnvironmentProps } from './world-props';
 import { LivingValleyComposition } from './living-valley-composition';
 import { GOLDEN_HOUR_VALLEY_PALETTE } from './living-valley-config';
+import { PresentationSnapshot } from '@flowstate/shared';
 import { FlowPath } from '../../game/movement/flow-path';
 
 export class EnvironmentView implements WorldPresentation {
@@ -84,7 +85,7 @@ export class EnvironmentView implements WorldPresentation {
     // 4. Elevated 3D Ribbon Path Visual Surface
     this.ribbonPath = new RibbonPathView(scene);
 
-    // 5. Macro World Composition Engine (The Living Valley)
+    // 5. Macro World Composition Engine (The Living Valley with TerrainSystem 2.0)
     this.livingValleyComposition = new LivingValleyComposition(scene);
 
     // 6. Legacy Environmental Props
@@ -99,6 +100,10 @@ export class EnvironmentView implements WorldPresentation {
    */
   public initLivingValley(path: FlowPath): void {
     this.livingValleyComposition.buildComposition(path);
+    const terrainMesh = this.livingValleyComposition.terrainSystem.getMesh();
+    if (terrainMesh) {
+      terrainMesh.receiveShadows = true;
+    }
   }
 
   public setHarmonyLevel(value: number): void {
@@ -136,6 +141,13 @@ export class EnvironmentView implements WorldPresentation {
     this.ribbonPath.setGlowIntensity(val);
     this.worldProps.setHarmonyVisuals(val);
     this.lighting.setHarmonyIntensity(val);
+  }
+
+  public updateFromPresentation(snapshot: Readonly<PresentationSnapshot>): void {
+    if (this.scene.fogDensity !== undefined) {
+      this.scene.fogDensity = snapshot.atmosphere.fogDensity;
+    }
+    this.applyHarmonyVisuals(snapshot.sky.skyBlend);
   }
 
   public dispose(): void {

@@ -1,8 +1,26 @@
 import { Scene, TargetCamera, Vector3 } from '@babylonjs/core';
 import { CameraPresentationController } from '../../game/presentation/camera-presentation-controller';
-import { CameraPresentationState, DEFAULT_PRESENTATION_PROFILE } from '../../game/presentation/presentation-profile';
+import {
+  CameraMode as PresentationCameraMode,
+  CameraPresentationState,
+  DEFAULT_PRESENTATION_PROFILE,
+} from '../../game/presentation/presentation-profile';
 
-export type CameraMode = 'CINEMATIC_IDLE' | 'PLAYING';
+export type CameraMode =
+  | 'CINEMATIC_IDLE'
+  | 'PLAYING'
+  | 'LOW_ANGLE_CHASE'
+  | 'DYNAMIC_ORBIT'
+  | 'CLOSE_ACTION'
+  | 'BIRDS_EYE';
+
+const CAMERA_MODE_CYCLE: CameraMode[] = [
+  'PLAYING',
+  'LOW_ANGLE_CHASE',
+  'DYNAMIC_ORBIT',
+  'CLOSE_ACTION',
+  'BIRDS_EYE',
+];
 
 export class GameplayCamera {
   private camera: TargetCamera;
@@ -10,7 +28,7 @@ export class GameplayCamera {
   private baseFov: number = 0.8;
 
   // Cinematic / Title Orbit State
-  private mode: CameraMode = 'CINEMATIC_IDLE';
+  private mode: CameraMode = 'PLAYING';
   private idleAngle: number = 0;
   private transitionAlpha: number = 0; // 0 = fully cinematic, 1 = fully gameplay
 
@@ -31,18 +49,48 @@ export class GameplayCamera {
   public setMode(newMode: CameraMode): void {
     if (this.mode === newMode) return;
     this.mode = newMode;
+    this.transitionAlpha = 0;
 
-    if (newMode === 'PLAYING') {
-      this.transitionAlpha = 0; // Start smooth interpolation swing into chase perspective
-      this.cameraController.setMode('Playing');
-    } else {
-      this.transitionAlpha = 0;
-      this.cameraController.setMode('Idle');
+    const presMode = this.mapModeToPresentation(newMode);
+    this.cameraController.setMode(presMode);
+  }
+
+  public cycleCameraAngle(): CameraMode {
+    const currentIndex = CAMERA_MODE_CYCLE.indexOf(this.mode);
+    const nextIndex = (currentIndex + 1) % CAMERA_MODE_CYCLE.length;
+    const nextMode = CAMERA_MODE_CYCLE[nextIndex];
+    this.setMode(nextMode);
+    return nextMode;
+  }
+
+  private mapModeToPresentation(mode: CameraMode): PresentationCameraMode {
+    switch (mode) {
+      case 'PLAYING':
+        return 'Playing';
+      case 'LOW_ANGLE_CHASE':
+        return 'LowAngleChase';
+      case 'DYNAMIC_ORBIT':
+        return 'DynamicOrbit';
+      case 'CLOSE_ACTION':
+        return 'CloseAction';
+      case 'BIRDS_EYE':
+        return 'BirdsEye';
+      case 'CINEMATIC_IDLE':
+      default:
+        return 'Idle';
     }
   }
 
   public getMode(): CameraMode {
     return this.mode;
+  }
+
+  private shakeIntensity: number = 0;
+  private shakeTimer: number = 0;
+
+  public triggerScreenShake(intensity: number = 0.5): void {
+    this.shakeIntensity = intensity;
+    this.shakeTimer = 0.3; // Shake duration in seconds
   }
 
   public applyPresentationState(state: CameraPresentationState, deltaTimeSeconds: number = 0.016): void {
@@ -51,9 +99,22 @@ export class GameplayCamera {
       return;
     }
 
+    // Apply Screen Shake Offset
+    let shakeX = 0;
+    let shakeY = 0;
+    if (this.shakeTimer > 0) {
+      this.shakeTimer -= deltaTimeSeconds;
+      const currentIntensity = this.shakeIntensity * (this.shakeTimer / 0.3);
+      shakeX = (Math.random() - 0.5) * 2.0 * currentIntensity;
+      shakeY = (Math.random() - 0.5) * 2.0 * currentIntensity;
+      if (this.shakeTimer <= 0) {
+        this.shakeIntensity = 0;
+      }
+    }
+
     // Passive Adapter Execution: Apply calculated camera position, target, and FOV directly
     const targetPos = new Vector3(state.lookTarget.x, state.lookTarget.y, state.lookTarget.z);
-    const camPos = new Vector3(state.position.x, state.position.y, state.position.z);
+    const camPos = new Vector3(state.position.x + shakeX, state.position.y + shakeY, state.position.z);
 
     if (this.transitionAlpha < 1.0) {
       this.transitionAlpha = Math.min(1.0, this.transitionAlpha + 1.8 * deltaTimeSeconds);

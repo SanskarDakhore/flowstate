@@ -55,7 +55,16 @@ export interface UnifiedPresentationProfile {
   };
 }
 
-export type CameraMode = 'Playing' | 'Idle' | 'Landing' | 'Airborne' | 'Transition';
+export type CameraMode =
+  | 'Playing'
+  | 'LowAngleChase'
+  | 'DynamicOrbit'
+  | 'CloseAction'
+  | 'BirdsEye'
+  | 'Idle'
+  | 'Landing'
+  | 'Airborne'
+  | 'Transition';
 
 export interface CameraIntent {
   readonly targetPosition: { x: number; y: number; z: number };
